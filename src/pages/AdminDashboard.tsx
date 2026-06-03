@@ -26,8 +26,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUser, getUsers, UserQueryParam, updateUserAdmin } from "@/api/user.api";
 import { getInventory, getInventoryItem, updateInventory, deleteInventory } from "@/api/inventory.api";
+import { getOrders, getOrder, updateOrder } from "@/api/order.api";
 import { useUserStore } from "@/features/user/user.store";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
+import { useOrderStore } from "@/features/order/order.store";
 import { useToast } from "@/hooks/use-toast";
 import { keepPreviousData } from "@tanstack/react-query";
 import { createInventory } from "@/api/inventory.api";
@@ -124,15 +126,7 @@ const mockLogistics = [
   { id: "SH005", orderId: "ORD-072", carrier: "Local Courier", tracking: "LC9384756", status: "out_for_delivery", origin: "Manuka", destination: "Sydney, AU", eta: "2026-04-10" },
 ];
 
-const allOrders = [
-  { id: "ORD-156", customer: "Sarah K.", items: 1, amount: "$89.99", status: "confirmed", payment: "paid", paymentMethod: "full", date: "2026-04-09" },
-  { id: "ORD-155", customer: "Mike R.", items: 3, amount: "$145.50", status: "delivered", payment: "paid", paymentMethod: "advance", date: "2026-04-08" },
-  { id: "ORD-154", customer: "Anna L.", items: 1, amount: "$62.00", status: "out_for_delivery", payment: "paid", paymentMethod: "cod", date: "2026-04-08" },
-  { id: "ORD-153", customer: "James C.", items: 2, amount: "$50.75", status: "pending", payment: "unpaid", paymentMethod: "advance", date: "2026-04-07" },
-  { id: "ORD-152", customer: "Alex T.", items: 4, amount: "$198.00", status: "delivered", payment: "paid", paymentMethod: "full", date: "2026-04-06" },
-  { id: "ORD-151", customer: "Priya S.", items: 1, amount: "$18.75", status: "cancelled", payment: "unpaid", paymentMethod: "cod", date: "2026-04-05" },
-  { id: "ORD-150", customer: "Emma W.", items: 2, amount: "$67.99", status: "confirmed", payment: "paid", paymentMethod: "full", date: "2026-04-04" },
-];
+// legacy `allOrders` mock removed; admin orders now fetched from backend
 
 const mockReceipts = [
   { id: "R001", orderId: "ORD-156", customer: "Sarah K.", amount: "$89.99", method: "full", account: "CBE - 1000012345678", uploadedAt: "2026-04-09 10:30", status: "approved", note: "" },
@@ -155,12 +149,12 @@ const DashboardSection = () => (
       <div className="bg-card border rounded-lg p-5">
         <h3 className="font-display font-semibold mb-4">Recent Orders</h3>
         <div className="space-y-3 text-sm">
-          {allOrders.slice(0, 4).map((o) => (
+          {/* {allOrders.slice(0, 4).map((o) => (
             <div key={o.id} className="flex items-center justify-between py-2 border-b last:border-0">
               <div><span className="font-medium">{o.id}</span><span className="text-muted-foreground ml-2">{o.customer}</span></div>
               <div className="flex items-center gap-3"><span>{o.amount}</span><StatusBadge status={o.status} /></div>
             </div>
-          ))}
+          ))} */}
         </div>
       </div>
       <div className="bg-card border rounded-lg p-5">
@@ -737,57 +731,236 @@ const InventorySection = () => {
 };
 
 const OrdersSection = () => {
-  const [tab, setTab] = useState("all");
-  const filteredOrders = tab === "all" ? allOrders : allOrders.filter((o) => o.status === tab);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState("all");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editStatus, setEditStatus] = useState("pending");
+
+  const setOrders = useOrderStore((s) => s.setOrders);
+  const selectedOrder = useOrderStore((s) => s.selectedOrder);
+  const setSelectedOrder = useOrderStore((s) => s.setSelectedOrder);
+  const updateOrderInStore = useOrderStore((s) => s.updateOrder);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const useOrders = (params: any) =>
+    useQuery({ queryKey: ["orders", params], queryFn: async () => await getOrders(params), placeholderData: keepPreviousData });
+
+  const statusParam = statusFilter === "all" ? undefined : statusFilter;
+  const paymentStatusParam = paymentStatusFilter === "all" ? undefined : paymentStatusFilter;
+  const paymentMethodParam = paymentMethodFilter === "all" ? undefined : paymentMethodFilter;
+
+  const response = useOrders({
+    page,
+    limit,
+    ...(statusParam ? { status: statusParam } : {}),
+    ...(paymentStatusParam ? { payment_status: paymentStatusParam } : {}),
+    ...(paymentMethodParam ? { payment_method: paymentMethodParam } : {}),
+  });
+
+  const orders = response.data?.data?.data ?? [];
+  const meta = response.data?.data?.meta;
+
+  const loadSelected = async (id: string) => {
+    try {
+      const { data } = await getOrder(id);
+      setSelectedOrder(data);
+      setEditStatus(data.status);
+      setIsViewOpen(true);
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to load order details.", variant: "destructive" });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedOrder) return;
+    setIsSaving(true);
+    try {
+       await updateOrder(selectedOrder.id, { status: editStatus as any });
+      
+      const { data } = await getOrder(selectedOrder.id); // Refetch to get updated data with relations
+      updateOrderInStore(data);
+      setSelectedOrder(data);
+      queryClient.invalidateQueries({
+        queryKey: ["orders"],
+      });
+      toast({ title: "Order updated", description: "Order status updated." });
+      setIsViewOpen(false);
+    } catch (err) {
+      toast({ title: "Update failed", description: "Unable to update order.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  useEffect(() => setPage(1), [statusFilter, paymentStatusFilter, paymentMethodFilter]);
+  useEffect(() => setOrders(orders), [orders, setOrders]);
 
   return (
     <div className="space-y-4">
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="all">All ({allOrders.length})</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
-          <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
-          <TabsTrigger value="out_for_delivery">In Transit</TabsTrigger>
-          <TabsTrigger value="delivered">Delivered</TabsTrigger>
-          <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v)}>
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+            <TabsTrigger value="confirmed">Confirmed</TabsTrigger>
+            <TabsTrigger value="out_for_delivery">In Transit</TabsTrigger>
+            <TabsTrigger value="delivered">Delivered</TabsTrigger>
+            <TabsTrigger value="cancelled">Cancelled</TabsTrigger>
+            <TabsTrigger value="rejected">Rejected</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Select value={paymentStatusFilter} onValueChange={(v) => setPaymentStatusFilter(v)}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Payment Status</SelectItem>
+            <SelectItem value="paid">Paid</SelectItem>
+            <SelectItem value="unpaid">Unpaid</SelectItem>
+            <SelectItem value="pending_review">Pending Review</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={paymentMethodFilter} onValueChange={(v) => setPaymentMethodFilter(v)}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Methods</SelectItem>
+            <SelectItem value="full">Full</SelectItem>
+            <SelectItem value="advance">Advance</SelectItem>
+            <SelectItem value="cod">Cash on Delivery</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="border rounded-lg overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Order ID</TableHead>
               <TableHead>Customer</TableHead>
-              <TableHead>Items</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Payment Method</TableHead>
+              <TableHead>Products</TableHead>
+              <TableHead>Total Amount</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Payment Status</TableHead>
+              <TableHead>Payment Method</TableHead>
+              <TableHead>Created</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders.map((o) => (
+            {orders.map((o) => (
               <TableRow key={o.id}>
                 <TableCell className="font-medium">{o.id}</TableCell>
-                <TableCell>{o.customer}</TableCell>
-                <TableCell>{o.items}</TableCell>
-                <TableCell className="font-medium">{o.amount}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="text-xs capitalize">
-                    {o.paymentMethod === "cod" ? "Cash on Delivery" : o.paymentMethod === "advance" ? "Advance (30%)" : "Full Payment"}
-                  </Badge>
-                </TableCell>
+                <TableCell>{o.user?.full_name}</TableCell>
+                <TableCell>{o.products?.length ?? 0}</TableCell>
+                <TableCell className="font-medium">${Number(o.total_amount).toFixed(2)}</TableCell>
                 <TableCell><StatusBadge status={o.status} /></TableCell>
-                <TableCell><StatusBadge status={o.payment} /></TableCell>
-                <TableCell className="text-muted-foreground text-sm">{o.date}</TableCell>
-                <TableCell className="text-right"><Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="h-4 w-4" /></Button></TableCell>
+                <TableCell><Badge variant="outline" className="text-xs capitalize">{o.payment_status}</Badge></TableCell>
+                <TableCell><Badge variant="outline" className="text-xs capitalize">{o.payment_method}</Badge></TableCell>
+                <TableCell className="text-sm text-muted-foreground">{o.created_at}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadSelected(o.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+
+        {meta && meta.total > meta.limit && (
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Prev</Button>
+            <span>Page {meta.page} of {Math.ceil(meta.total / meta.limit)}</span>
+            <Button disabled={page * meta.limit >= meta.total} onClick={() => setPage((p) => p + 1)}>Next</Button>
+          </div>
+        )}
       </div>
+
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+          </DialogHeader>
+
+          {selectedOrder ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p><strong>Order ID</strong></p>
+                  <p>{selectedOrder.id}</p>
+                </div>
+                <div>
+                  <p><strong>Customer</strong></p>
+                  <p>{selectedOrder.user?.full_name}</p>
+                  <p className="text-xs text-muted-foreground">ID: {selectedOrder.user?.id}</p>
+                </div>
+                <div>
+                  <p><strong>Address</strong></p>
+                  <p className="text-sm">{selectedOrder.address}</p>
+                </div>
+                <div>
+                  <p><strong>Total</strong></p>
+                  <p>${Number(selectedOrder.total_amount).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p><strong>Created At</strong></p>
+                  <p>{selectedOrder.created_at}</p>
+                </div>
+                <div>
+                  <p><strong>Updated At</strong></p>
+                  <p>{selectedOrder.updated_at}</p>
+                </div>
+              </div>
+
+              <div>
+                <Label>Status</Label>
+                <Select value={editStatus} onValueChange={(v) => setEditStatus(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <h4 className="font-medium">Products</h4>
+                <div className="space-y-2 mt-2">
+                  {selectedOrder.products.map((p) => (
+                    <div key={p.id} className="flex justify-between text-sm">
+                      <div>Product ID: {p.id}</div>
+                      <div>Qty: {p.quantity}</div>
+                      <div className="font-medium">${Number(p.price).toFixed(2)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading order...</p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+            <Button onClick={handleSave} disabled={isSaving || !selectedOrder}>{isSaving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -1113,61 +1286,6 @@ const SellersSection = () => (
   </div>
 );
 
-const ComplaintsSection = () => {
-  const [selected, setSelected] = useState<typeof mockComplaints[0] | null>(null);
-  const [tab, setTab] = useState("all");
-  const filtered = tab === "all" ? mockComplaints : mockComplaints.filter((c) => c.status === tab);
-
-  return (
-    <div className="space-y-4">
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="all">All ({mockComplaints.length})</TabsTrigger>
-          <TabsTrigger value="open">Open</TabsTrigger>
-          <TabsTrigger value="investigating">Investigating</TabsTrigger>
-          <TabsTrigger value="resolved">Resolved</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      <div className="space-y-3">
-        {filtered.map((c) => (
-          <div key={c.id} className="bg-card border rounded-lg p-4 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelected(c)}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-medium text-sm">{c.id}</span>
-                  <PriorityBadge priority={c.priority} />
-                  <StatusBadge status={c.status} />
-                </div>
-                <h4 className="font-semibold">{c.subject}</h4>
-                <p className="text-sm text-muted-foreground mt-1">By {c.user} · Order {c.orderId} · {c.date}</p>
-              </div>
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"><MessageSquare className="h-4 w-4" /></Button>
-            </div>
-          </div>
-        ))}
-      </div>
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{selected?.subject}</DialogTitle>
-            <DialogDescription>{selected?.id} · {selected?.user} · Order {selected?.orderId}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2"><PriorityBadge priority={selected?.priority || "low"} /><StatusBadge status={selected?.status || "open"} /></div>
-            <p className="text-sm">{selected?.description}</p>
-            <div><label className="text-sm font-medium mb-1 block">Admin Response</label><Textarea placeholder="Type your response..." rows={3} /></div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
-            <Button variant="destructive">Escalate</Button>
-            <Button>Mark Resolved</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-};
-
 const LogisticsSection = () => (
   <div className="space-y-4">
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -1381,7 +1499,7 @@ const AdminDashboard = () => {
     logistics: <LogisticsSection />,
     users: <UsersSection />,
     sellers: <SellersSection />,
-    complaints: <ComplaintsSection />,
+    // complaints: <ComplaintsSection />,
     contact: <ContactAdminSection />,
     reports: <ReportsSection />,
   };

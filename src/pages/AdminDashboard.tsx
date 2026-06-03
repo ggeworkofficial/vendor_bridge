@@ -27,12 +27,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUser, getUsers, UserQueryParam, updateUserAdmin } from "@/api/user.api";
 import { getInventory, getInventoryItem, updateInventory, deleteInventory } from "@/api/inventory.api";
 import { getOrders, getOrder, updateOrder } from "@/api/order.api";
+import { getLogistics, getLogisticsItem, createLogistics, updateLogistics } from "@/api/logistics.api";
 import { useUserStore } from "@/features/user/user.store";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useOrderStore } from "@/features/order/order.store";
+import { useLogisticsStore } from "@/features/logistics/logistics.store";
 import { useToast } from "@/hooks/use-toast";
 import { keepPreviousData } from "@tanstack/react-query";
 import { createInventory } from "@/api/inventory.api";
+import { createLogisticsValidation } from "@/lib/validation/logistics";
 
 const sections = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -118,13 +121,7 @@ const mockComplaints = [
   { id: "C005", user: "Priya Sharma", orderId: "ORD-072", subject: "Quality not as described", status: "investigating", priority: "low", date: "2026-04-05", description: "The honey jar label says organic but tastes different from expected." },
 ];
 
-const mockLogistics = [
-  { id: "SH001", orderId: "ORD-001", carrier: "DHL Express", tracking: "DHL9283746", status: "in_transit", origin: "Marrakech", destination: "San Francisco, CA", eta: "2026-04-12" },
-  { id: "SH002", orderId: "ORD-002", carrier: "FedEx", tracking: "FX8374652", status: "processing", origin: "Kerala", destination: "Portland, OR", eta: "2026-04-15" },
-  { id: "SH003", orderId: "ORD-098", carrier: "UPS", tracking: "UPS7463829", status: "delivered", origin: "Istanbul", destination: "New York, NY", eta: "2026-04-01" },
-  { id: "SH004", orderId: "ORD-045", carrier: "DHL Express", tracking: "DHL6253948", status: "in_transit", origin: "Jingdezhen", destination: "London, UK", eta: "2026-04-14" },
-  { id: "SH005", orderId: "ORD-072", carrier: "Local Courier", tracking: "LC9384756", status: "out_for_delivery", origin: "Manuka", destination: "Sydney, AU", eta: "2026-04-10" },
-];
+
 
 // legacy `allOrders` mock removed; admin orders now fetched from backend
 
@@ -1286,41 +1283,454 @@ const SellersSection = () => (
   </div>
 );
 
-const LogisticsSection = () => (
-  <div className="space-y-4">
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      <StatCard label="In Transit" value="23" change="5 new today" icon={Truck} />
-      <StatCard label="Out for Delivery" value="8" change="3 arriving today" icon={Package} />
-      <StatCard label="Delivered (30d)" value="342" change="12% vs last month" icon={CheckCircle} />
-    </div>
-    <div className="border rounded-lg overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Shipment</TableHead>
-            <TableHead>Order</TableHead>
-            <TableHead>Carrier</TableHead>
-            <TableHead>Route</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>ETA</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {mockLogistics.map((l) => (
-            <TableRow key={l.id}>
-              <TableCell><div><p className="font-medium text-sm">{l.id}</p><p className="text-xs text-muted-foreground">{l.tracking}</p></div></TableCell>
-              <TableCell className="font-medium">{l.orderId}</TableCell>
-              <TableCell>{l.carrier}</TableCell>
-              <TableCell className="text-sm"><span className="text-muted-foreground">{l.origin}</span><span className="mx-1">→</span><span>{l.destination}</span></TableCell>
-              <TableCell><StatusBadge status={l.status} /></TableCell>
-              <TableCell className="text-sm">{l.eta}</TableCell>
+const LogisticsSection = () => {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+
+  // Create form state
+  const [createOrderId, setCreateOrderId] = useState("");
+  const [createCarrier, setCreateCarrier] = useState("");
+  const [createTrackingNumber, setCreateTrackingNumber] = useState("");
+  const [createStatus, setCreateStatus] = useState<"processing" | "in_transit" | "out_for_delivery" | "delivered">("processing");
+  const [createOrigin, setCreateOrigin] = useState("");
+  const [createDestination, setCreateDestination] = useState("");
+  const [createEstimatedEta, setCreateEstimatedEta] = useState("");
+
+  // Edit form state
+  const [editCarrier, setEditCarrier] = useState("");
+  const [editTrackingNumber, setEditTrackingNumber] = useState("");
+  const [editStatus, setEditStatus] = useState<"processing" | "in_transit" | "out_for_delivery" | "delivered">("processing");
+  const [editOrigin, setEditOrigin] = useState("");
+  const [editDestination, setEditDestination] = useState("");
+  const [editEstimatedEta, setEditEstimatedEta] = useState("");
+
+  const setLogistics = useLogisticsStore((s) => s.setLogistics);
+  const selectedLogistics = useLogisticsStore((s) => s.selectedLogistics);
+  const setSelectedLogistics = useLogisticsStore((s) => s.setSelectedLogistics);
+  const addLogisticsToStore = useLogisticsStore((s) => s.addLogistics);
+  const updateLogisticsInStore = useLogisticsStore((s) => s.updateLogistics);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const useLogisticsQuery = (params: any) =>
+    useQuery({
+      queryKey: ["logistics", params],
+      queryFn: async () => await getLogistics(params),
+      placeholderData: keepPreviousData,
+    });
+
+  const statusParam = statusFilter === "all" ? undefined : statusFilter;
+  const response = useLogisticsQuery({
+    page,
+    limit,
+    ...(search ? { search } : {}),
+    ...(statusParam ? { status: statusParam } : {}),
+  });
+
+  const logistics = response.data?.data?.data ?? [];
+  const meta = response.data?.data?.meta;
+
+  // Calculate stats from current page data
+  const inTransitCount = logistics.filter((l) => l.status === "in_transit").length;
+  const outForDeliveryCount = logistics.filter((l) => l.status === "out_for_delivery").length;
+  const deliveredCount = logistics.filter((l) => l.status === "delivered").length;
+
+  const loadSelected = async (id: string) => {
+    try {
+      const { data } = await getLogisticsItem(id);
+      // console.log("Loaded logistics item:", data);
+      setSelectedLogistics(data);
+      setEditCarrier(data.carrier);
+      setEditTrackingNumber(data.tracking_number);
+      setEditStatus(data.status);
+      setEditOrigin(data.origin);
+      setEditDestination(data.destination);
+      setEditEstimatedEta(data.estimated_eta);
+      setIsViewOpen(true);
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to load logistics details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreate = async () => {
+    // Validate
+    if (!createOrderId || !createCarrier || !createTrackingNumber || !createOrigin || !createDestination || !createEstimatedEta) {
+      toast({
+        title: "Validation error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const { data } = await createLogistics({
+        order_id: createOrderId,
+        carrier: createCarrier,
+        tracking_number: createTrackingNumber,
+        status: createStatus,
+        origin: createOrigin,
+        destination: createDestination,
+        estimated_eta: createEstimatedEta,
+      });
+
+      addLogisticsToStore(data);
+      queryClient.invalidateQueries({ queryKey: ["logistics"] });
+
+      toast({ title: "Logistics created", description: "New shipment record added." });
+
+      // Reset form
+      setCreateOrderId("");
+      setCreateCarrier("");
+      setCreateTrackingNumber("");
+      setCreateStatus("processing");
+      setCreateOrigin("");
+      setCreateDestination("");
+      setCreateEstimatedEta("");
+      setIsCreateOpen(false);
+    } catch (err) {
+      toast({
+        title: "Create failed",
+        description: "Unable to create logistics record.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!selectedLogistics) return;
+    setIsSaving(true);
+    try {
+       await updateLogistics(selectedLogistics.id, {
+        carrier: editCarrier,
+        tracking_number: editTrackingNumber,
+        status: editStatus,
+        origin: editOrigin,
+        destination: editDestination,
+        estimated_eta: editEstimatedEta,
+      });
+
+      const { data } = await getLogisticsItem(selectedLogistics.id);
+      updateLogisticsInStore(data);
+      setSelectedLogistics(data);
+      queryClient.invalidateQueries({ queryKey: ["logistics"] });
+
+      toast({ title: "Logistics updated", description: "Shipment record saved." });
+      setIsViewOpen(false);
+    } catch (err) {
+      toast({
+        title: "Update failed",
+        description: "Unable to update logistics record.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  useEffect(() => setPage(1), [search, statusFilter]);
+  useEffect(() => setLogistics(logistics), [logistics, setLogistics]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="In Transit" value={String(inTransitCount)} change="Current shipments" icon={Truck} />
+        <StatCard label="Out for Delivery" value={String(outForDeliveryCount)} change="Being delivered" icon={Package} />
+        <StatCard label="Delivered" value={String(deliveredCount)} change="Completed" icon={CheckCircle} />
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Logistics
+        </Button>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by order ID or tracking..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="in_transit">In Transit</SelectItem>
+            <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Logistics ID</TableHead>
+              <TableHead>Order ID</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Carrier</TableHead>
+              <TableHead>Tracking Number</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Origin</TableHead>
+              <TableHead>Destination</TableHead>
+              <TableHead>ETA</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {logistics.map((l) => (
+              <TableRow key={l.id}>
+                <TableCell className="font-medium text-sm">{l.id}</TableCell>
+                <TableCell className="font-medium text-sm">{l.order_id}</TableCell>
+                <TableCell className="text-sm">{l.order?.user?.full_name}</TableCell>
+                <TableCell className="text-sm">{l.carrier}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{l.tracking_number}</TableCell>
+                <TableCell>
+                  <StatusBadge status={l.status} />
+                </TableCell>
+                <TableCell className="text-sm">{l.origin}</TableCell>
+                <TableCell className="text-sm">{l.destination}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{l.estimated_eta}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => loadSelected(l.id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+
+        {meta && meta.total > meta.limit && (
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+              Prev
+            </Button>
+            <span>
+              Page {meta.page} of {Math.ceil(meta.total / meta.limit)}
+            </span>
+            <Button disabled={page * meta.limit >= meta.total} onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Logistics Record</DialogTitle>
+            <DialogDescription>Create a new shipment tracking record</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 space-y-1">
+              <Label>Order ID</Label>
+              <Input
+                value={createOrderId}
+                onChange={(e) => setCreateOrderId(e.target.value)}
+                placeholder="e.g., ORD-001"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Carrier</Label>
+              <Input
+                value={createCarrier}
+                onChange={(e) => setCreateCarrier(e.target.value)}
+                placeholder="e.g., DHL Express"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Tracking Number</Label>
+              <Input
+                value={createTrackingNumber}
+                onChange={(e) => setCreateTrackingNumber(e.target.value)}
+                placeholder="e.g., DHL29293946"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Status</Label>
+              <Select value={createStatus} onValueChange={(v: any) => setCreateStatus(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="in_transit">In Transit</SelectItem>
+                  <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Estimated ETA</Label>
+              <Input
+                type="date"
+                value={createEstimatedEta}
+                onChange={(e) => setCreateEstimatedEta(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Origin</Label>
+              <Input
+                value={createOrigin}
+                onChange={(e) => setCreateOrigin(e.target.value)}
+                placeholder="e.g., Kerala"
+              />
+            </div>
+
+            <div className="col-span-2 space-y-1">
+              <Label>Destination</Label>
+              <Input
+                value={createDestination}
+                onChange={(e) => setCreateDestination(e.target.value)}
+                placeholder="e.g., Portland, OR"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate} disabled={isCreating}>
+              {isCreating ? "Creating..." : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Logistics Details</DialogTitle>
+            <DialogDescription>{selectedLogistics?.id}</DialogDescription>
+          </DialogHeader>
+
+          {selectedLogistics ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs">Logistics ID</p>
+                  <p className="font-medium">{selectedLogistics.id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Order ID</p>
+                  <p className="font-medium">{selectedLogistics.order_id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Customer</p>
+                  <p className="font-medium">{selectedLogistics.order?.user?.full_name}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Customer ID</p>
+                  <p className="font-medium text-xs">{selectedLogistics.order?.user?.id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Created At</p>
+                  <p className="font-medium text-xs">{selectedLogistics.created_at}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Updated At</p>
+                  <p className="font-medium text-xs">{selectedLogistics.updated_at}</p>
+                </div>
+              </div>
+
+              <div className="border-t pt-4 space-y-3">
+                <div className="space-y-1">
+                  <Label>Carrier</Label>
+                  <Input value={editCarrier} onChange={(e) => setEditCarrier(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Tracking Number</Label>
+                  <Input value={editTrackingNumber} onChange={(e) => setEditTrackingNumber(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <Select value={editStatus} onValueChange={(v: any) => setEditStatus(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="in_transit">In Transit</SelectItem>
+                      <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Origin</Label>
+                  <Input value={editOrigin} onChange={(e) => setEditOrigin(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Destination</Label>
+                  <Input value={editDestination} onChange={(e) => setEditDestination(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Estimated ETA</Label>
+                  <Input
+                    type="date"
+                    value={editEstimatedEta}
+                    onChange={(e) => setEditEstimatedEta(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving || !selectedLogistics}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  </div>
-);
+  );
+};
 
 const ContactAdminSection = () => {
   const [socialLinks, setSocialLinks] = useState(mockSocialLinks);

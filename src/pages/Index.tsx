@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ProductCard from "@/components/ProductCard";
 import Layout from "@/components/Layout";
-import { mockProducts, categories } from "@/lib/mock-data";
+import { mockProducts } from "@/lib/mock-products";
+import { categories } from "@/lib/mock-data";
 import heroBg from "@/assets/hero-bg.jpg";
 import { Link } from "react-router-dom";
 

@@ -6,12 +6,29 @@ import { useCart } from "@/lib/cart-context";
 import { Badge } from "@/components/ui/badge";
 import logo from "@/assets/logo.png";
 import { useState } from "react";
+import { useAuth } from "@/features/auth/auth.store";
+import { api } from "@/api/client";
+import { logout as logoutFun } from "@/api/auth.api";
 
 const Header = () => {
   const { itemCount } = useCart();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useAuth((state) => state.user);
+  const { logout } = useAuth();
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+
+      await logoutFun();
+      logout();
+      navigate("/login");
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+    
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,15 +70,17 @@ const Header = () => {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/contact">Contact</Link>
           </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/admin">Admin</Link>
-          </Button>
+          {user?.role === "admin" && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/admin">Admin</Link>
+            </Button>
+          )}
         </nav>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" asChild>
-            <Link to="/login">
+            <Link to={user ? "/profile" : "/login"}>
               <User className="h-5 w-5" />
             </Link>
           </Button>
@@ -83,6 +102,17 @@ const Header = () => {
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
+                    {user ? (
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              Logout
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/login">
+                <User className="h-5 w-5" />
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

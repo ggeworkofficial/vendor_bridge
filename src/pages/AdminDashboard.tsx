@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BarChart3, Package, Truck, ShoppingBag, Users, Store,
   AlertTriangle, TrendingUp, Home, Search, MoreHorizontal,
@@ -19,9 +19,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import logo from "@/assets/logo.png";
-import { mockProducts, mockOrders } from "@/lib/mock-data";
+import { mockOrders } from "@/lib/mock-data";
+import { mockProducts } from "@/lib/mock-products";
 import { mockSocialLinks, mockContactPhones, mockPaymentAccounts, type SocialLink, type ContactPhone, type PaymentAccount } from "@/lib/contact-data";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getUser, getUsers, UserQueryParam, updateUserAdmin } from "@/api/user.api";
+import { getInventory, getInventoryItem, updateInventory, deleteInventory } from "@/api/inventory.api";
+import { useUserStore } from "@/features/user/user.store";
+import { useInventoryStore } from "@/features/inventory/inventory.store";
+import { useToast } from "@/hooks/use-toast";
+import { keepPreviousData } from "@tanstack/react-query";
+import { createInventory } from "@/api/inventory.api";
 
 const sections = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -90,15 +99,6 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
 };
 
 // ─── Mock Data ───────────────────────────────────────────────
-
-const mockUsers = [
-  { id: "U001", name: "Sarah Kim", email: "sarah@example.com", role: "buyer", orders: 12, joined: "2026-01-15", status: "active" },
-  { id: "U002", name: "Mike Ross", email: "mike@example.com", role: "buyer", orders: 8, joined: "2026-02-20", status: "active" },
-  { id: "U003", name: "Anna Lee", email: "anna@example.com", role: "contributor", orders: 0, joined: "2026-03-01", status: "active" },
-  { id: "U004", name: "James Chen", email: "james@example.com", role: "buyer", orders: 3, joined: "2026-03-10", status: "suspended" },
-  { id: "U005", name: "Priya Sharma", email: "priya@example.com", role: "contributor", orders: 0, joined: "2026-03-22", status: "active" },
-  { id: "U006", name: "Alex Turner", email: "alex@example.com", role: "buyer", orders: 25, joined: "2025-11-05", status: "active" },
-];
 
 const mockSellers = [
   { id: "S001", name: "Artisan Leather Co.", location: "Marrakech, Morocco", products: 14, verified: true, revenue: "$12,400", contact: "+212 555 0101" },
@@ -178,31 +178,227 @@ const DashboardSection = () => (
 
 const InventorySection = () => {
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const filtered = mockProducts.filter((p) => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-    const matchCat = categoryFilter === "all" || p.category === categoryFilter;
-    return matchSearch && matchCat;
+  const [qualityFilter, setQualityFilter] = useState("all");
+  const [verifiedFilter, setVerifiedFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPrice, setEditPrice] = useState<number>(0);
+  const [editQuantity, setEditQuantity] = useState(0);
+  const [editQuality, setEditQuality] = useState("medium");
+  const [editVerified, setEditVerified] = useState(false);
+  const [editLocation, setEditLocation] = useState("");
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  const setInventory = useInventoryStore((state) => state.setInventory);
+  const selectedProduct = useInventoryStore((state) => state.selectedProduct);
+  const setSelectedProduct = useInventoryStore((state) => state.setSelectedProduct);
+  const updateProduct = useInventoryStore((state) => state.updateProduct);
+  const deleteProduct = useInventoryStore((state) => state.deleteProduct);
+
+  const [createName, setCreateName] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createPrice, setCreatePrice] = useState(0);
+  const [createQuantity, setCreateQuantity] = useState(0);
+  const [createQuality, setCreateQuality] = useState("medium");
+  const [createCategoryId, setCreateCategoryId] = useState("");
+  const [createSellerId, setCreateSellerId] = useState("");
+  const [createLocation, setCreateLocation] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [createImages, setCreateImages] = useState<File[]>([]);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const useInventory = (params: any) => {
+    return useQuery({
+      queryKey: ["inventory", params],
+      queryFn: async () => await getInventory(params),
+      placeholderData: keepPreviousData,
+    });
+  };
+
+  const verifiedParam = verifiedFilter === "all" ? undefined : verifiedFilter;
+  const qualityParam = qualityFilter === "all" ? undefined : qualityFilter;
+  const response = useInventory({
+    page,
+    limit,
+    search,
+    ...(qualityParam ? { quality_label: qualityParam } : {}),
+    ...(verifiedParam ? { verified: verifiedParam } : {}),
   });
+
+  const inventory = response.data?.data?.data ?? [];
+  const meta = response.data?.data?.meta;
+
+  const loadSelectedProduct = async (id: string) => {
+    try {
+      const { data } = await getInventoryItem(id);
+      setSelectedProduct(data);
+      setEditName(data.name);
+      setEditDescription(data.description);
+      setEditPrice(data.price);
+      setEditQuantity(data.quantity);
+      setEditQuality(data.quality_label);
+      setEditVerified(!!data.verified);
+      setEditLocation(data.location);
+      setIsViewOpen(true);
+    } catch (error) {
+      toast({
+        title: "Unable to load product",
+        description: "Failed to fetch the selected product details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+
+    setCreateImages(Array.from(e.target.files));
+  };
+
+  const handleCreate = async () => {
+  setIsCreating(true);
+
+  try {
+    const formData = new FormData();
+
+    formData.append("name", createName);
+    formData.append("description", createDescription);
+    formData.append("price", String(createPrice));
+    formData.append("quantity", String(createQuantity));
+    formData.append("quality_label", createQuality);
+    formData.append("verified", "false");
+    formData.append("category_id", createCategoryId);
+    formData.append("seller_id", createSellerId);
+    formData.append("location", createLocation);
+
+    createImages.forEach((file) => {
+      formData.append("images", file);
+    });
+
+    await createInventory(formData);
+
+    queryClient.invalidateQueries({
+      queryKey: ["inventory"],
+    });
+
+    toast({ title: "Product created" });
+
+    setIsCreateOpen(false);
+  } catch (err) {
+    toast({
+      title: "Create failed",
+      variant: "destructive",
+    });
+  } finally {
+    setIsCreating(false);
+  }
+};
+
+  const handleSave = async () => {
+    if (!selectedProduct) return;
+    setIsSaving(true);
+    try {
+      const { data } = await updateInventory(selectedProduct.id, {
+        name: editName,
+        description: editDescription,
+        price: editPrice,
+        quantity: editQuantity,
+        quality_label: editQuality as any,
+        verified: editVerified,
+        location: editLocation,
+      });
+
+      await getInventoryItem(selectedProduct.id); // Refetch to get updated data with relations
+
+      updateProduct(data);
+      setSelectedProduct(data);
+      queryClient.invalidateQueries({
+        queryKey: ["inventory"],
+      });
+      toast({
+        title: "Product updated",
+        description: "Inventory item saved successfully.",
+      });
+      setIsViewOpen(false);
+    } catch (error) {
+      toast({
+        title: "Update failed",
+        description: "Unable to save product changes.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!productToDelete) return;
+    try {
+      await deleteInventory(productToDelete);
+      deleteProduct(productToDelete);
+      queryClient.invalidateQueries({
+        queryKey: ["inventory"],
+      });
+      toast({
+        title: "Product removed",
+        description: "Inventory item deleted successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Delete failed",
+        description: "Unable to delete the product.",
+        variant: "destructive",
+      });
+    } finally {
+      setProductToDelete(null);
+      setIsDeleteOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, qualityFilter, verifiedFilter]);
+
+  useEffect(() => {
+    setInventory(inventory);
+  }, [inventory, setInventory]);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Product
+        </Button>
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Category" /></SelectTrigger>
+        <Select value={qualityFilter} onValueChange={setQualityFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="Fashion">Fashion</SelectItem>
-            <SelectItem value="Food & Beverages">Food & Beverages</SelectItem>
-            <SelectItem value="Home & Living">Home & Living</SelectItem>
-            <SelectItem value="Electronics">Electronics</SelectItem>
+            <SelectItem value="all">All Quality</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
           </SelectContent>
         </Select>
-        <Button><Package className="h-4 w-4 mr-2" /> Add Product</Button>
+        <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Verification</SelectItem>
+            <SelectItem value="true">Verified</SelectItem>
+            <SelectItem value="false">Unverified</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="border rounded-lg overflow-hidden">
         <Table>
@@ -210,39 +406,332 @@ const InventorySection = () => {
             <TableRow>
               <TableHead>Product</TableHead>
               <TableHead>Category</TableHead>
+              <TableHead>Seller</TableHead>
               <TableHead>Price</TableHead>
+              <TableHead>Quantity</TableHead>
               <TableHead>Quality</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Rating</TableHead>
+              <TableHead>Verified</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((p) => (
-              <TableRow key={p.id}>
+            {inventory.map((product) => (
+              <TableRow key={product.id}>
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <img src={p.images[0]} alt={p.name} className="h-10 w-10 rounded object-cover" />
-                    <div><p className="font-medium text-sm">{p.name}</p><p className="text-xs text-muted-foreground">{p.location}</p></div>
+                    <img src={product.images?.[0]?.image_url || '../assets/placeholder.png'} alt={product.name} className="h-10 w-10 rounded object-cover" />
+                    <div>
+                      <p className="font-medium text-sm">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">{product.location}</p>
+                    </div>
                   </div>
                 </TableCell>
-                <TableCell><Badge variant="outline" className="text-xs">{p.category}</Badge></TableCell>
-                <TableCell className="font-medium">${p.price.toFixed(2)}</TableCell>
-                <TableCell><Badge className={`text-xs ${p.qualityLabel === "high" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>{p.qualityLabel}</Badge></TableCell>
-                <TableCell>{p.verified ? <Badge className="bg-success/10 text-success text-xs gap-1"><BadgeCheck className="h-3 w-3" />Verified</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground gap-1"><Clock className="h-3 w-3" />Pending</Badge>}</TableCell>
-                <TableCell><div className="flex items-center gap-1 text-sm"><Star className="h-3.5 w-3.5 fill-secondary text-secondary" />{p.rating}</div></TableCell>
+                <TableCell><Badge variant="outline" className="text-xs">{product.category.name}</Badge></TableCell>
+                <TableCell className="text-sm text-muted-foreground">{product.seller.name}</TableCell>
+                <TableCell className="font-medium">${Number(product.price).toFixed(2)}</TableCell>
+                <TableCell>{product.quantity}</TableCell>
+                <TableCell><PriorityBadge priority={product.quality_label} /></TableCell>
+                <TableCell>{product.verified ? <Badge className="bg-success/10 text-success text-xs">Verified</Badge> : <Badge variant="outline" className="text-xs">Pending</Badge>}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => loadSelectedProduct(product.id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => loadSelectedProduct(product.id)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => {
+                        setProductToDelete(product.id);
+                        setIsDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        {meta && meta.total > meta.limit && (
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <Button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+              Prev
+            </Button>
+            <span>
+              Page {meta.page} of {Math.ceil(meta.total / meta.limit)}
+            </span>
+            <Button disabled={page * meta.limit >= meta.total} onClick={() => setPage((current) => current + 1)}>
+              Next
+            </Button>
+          </div>
+        )}
       </div>
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      <DialogContent className="max-w-2xl">
+        <div className="col-span-2 space-y-1">
+        <Label>Images</Label>
+
+        <Input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={handleImageChange}
+        />
+
+        {createImages.length > 0 && (
+          <div className="flex gap-2 flex-wrap mt-2">
+            {createImages.map((file, i) => (
+              <div
+                key={i}
+                className="text-xs px-2 py-1 bg-muted rounded"
+              >
+                {file.name}
+              </div>
+            ))}
+          </div>
+        )}
+        </div>
+        <DialogHeader>
+          <DialogTitle>Create Product</DialogTitle>
+          <DialogDescription>
+            Add a new inventory item to the system
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-4">
+          {/* Name */}
+          <div className="col-span-2 space-y-1">
+            <Label>Name</Label>
+            <Input value={createName} onChange={(e) => setCreateName(e.target.value)} />
+          </div>
+
+          {/* Description */}
+          <div className="col-span-2 space-y-1">
+            <Label>Description</Label>
+            <Textarea
+              value={createDescription}
+              onChange={(e) => setCreateDescription(e.target.value)}
+            />
+          </div>
+
+          {/* Price */}
+          <div className="space-y-1">
+            <Label>Price</Label>
+            <Input
+              type="number"
+              value={createPrice}
+              onChange={(e) => setCreatePrice(Number(e.target.value))}
+            />
+          </div>
+
+          {/* Quantity */}
+          <div className="space-y-1">
+            <Label>Quantity</Label>
+            <Input
+              type="number"
+              value={createQuantity}
+              onChange={(e) => setCreateQuantity(Number(e.target.value))}
+            />
+          </div>
+
+          {/* Quality */}
+          <div className="space-y-1">
+            <Label>Quality</Label>
+            <Select value={createQuality} onValueChange={setCreateQuality}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Category ID */}
+          <div className="space-y-1">
+            <Label>Category ID</Label>
+            <Input
+              value={createCategoryId}
+              onChange={(e) => setCreateCategoryId(e.target.value)}
+            />
+          </div>
+
+          {/* Seller ID */}
+          <div className="space-y-1">
+            <Label>Seller ID</Label>
+            <Input
+              value={createSellerId}
+              onChange={(e) => setCreateSellerId(e.target.value)}
+            />
+          </div>
+
+          {/* Location */}
+          <div className="col-span-2 space-y-1">
+            <Label>Location</Label>
+            <Input
+              value={createLocation}
+              onChange={(e) => setCreateLocation(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+            Cancel
+          </Button>
+
+          <Button onClick={handleCreate} disabled={isCreating}>
+            {isCreating ? "Creating..." : "Create Product"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Product Details</DialogTitle>
+          </DialogHeader>
+
+          {selectedProduct ? (
+            <div className="space-y-4">
+              <div className="grid lg:grid-cols-[280px_1fr] gap-6">
+                <div className="rounded-lg overflow-hidden bg-muted">
+                  <img src={selectedProduct.images?.[0]?.image_url || '../assets/placeholder.png'} alt={selectedProduct.name} className="w-full h-64 object-cover" />
+                </div>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Name</p>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Description</p>
+                    <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={4} />
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Price</p>
+                      <Input 
+                        type="number" 
+                        value={editPrice} 
+                        onChange={(e) => setEditPrice(Number(e.target.value))} 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Quantity</p>
+                      <Input type="number" value={editQuantity} onChange={(e) => setEditQuantity(Number(e.target.value))} />
+                    </div>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div>
+                      <Label>Quality</Label>
+                      <Select value={editQuality} onValueChange={(value) => setEditQuality(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="low">Low</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Verified</Label>
+                      <Select value={editVerified.toString()} onValueChange={(value) => setEditVerified(value === "true")}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">Verified</SelectItem>
+                          <SelectItem value="false">Unverified</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Location</p>
+                    <Input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3 text-sm text-muted-foreground">
+                <div>
+                  <p><strong>Category</strong></p>
+                  <p>{selectedProduct.category?.name ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Seller</strong></p>
+                  <p>{selectedProduct.seller?.name ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Location</strong></p>
+                  <p>{selectedProduct.location ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Rating</strong></p>
+                  <p>{selectedProduct.rating ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Review Count</strong></p>
+                  <p>{selectedProduct.reviewCount ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Created At</strong></p>
+                  <p>{selectedProduct.created_at ?? ""}</p>
+                </div>
+                <div>
+                  <p><strong>Updated At</strong></p>
+                  <p>{selectedProduct.updated_at || ""}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading product details...</p>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsViewOpen(false)}>Close</Button>
+            <Button onClick={handleSave} disabled={isSaving || !selectedProduct}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Product</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this inventory item?</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -416,14 +905,38 @@ const PaymentsSection = () => {
 };
 
 const UsersSection = () => {
+  
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const filtered = mockUsers.filter((u) => {
-    const matchSearch = !search || u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === "all" || u.role === roleFilter;
-    return matchSearch && matchRole;
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const setSelectedUser = useUserStore((state) => state.setSelectedUser);
+  const selectedUser = useUserStore((state) => state.selectedUser);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  type Role = "admin" | "buyer" | "contributor";
+  type Status = "active" | "suspended";
+
+  const [editRole, setEditRole] = useState<Role>("buyer");
+  const [editStatus, setEditStatus] = useState<Status>("active");
+  const { toast } = useToast();
+  
+
+  const useUsers = (params: UserQueryParam) => {
+    return useQuery({ 
+      queryKey: ["users", params],
+      queryFn: async () => await getUsers(params)
+    });
+    
+  };
+  const role = roleFilter === "all" ? undefined : (roleFilter as 'buyer' | 'contributor' | 'admin');
+    const response = useUsers({
+      page,
+      limit,
+      search,
+      ...(role ? { role } : {}),
   });
 
+  const meta = response.data?.data?.meta;
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-3">
@@ -446,23 +959,26 @@ const UsersSection = () => {
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Orders</TableHead>
               <TableHead>Joined</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((u) => (
+            {response.data?.data?.data.map((u) => (
               <TableRow key={u.id}>
-                <TableCell><div><p className="font-medium text-sm">{u.name}</p><p className="text-xs text-muted-foreground">{u.email}</p></div></TableCell>
+                <TableCell><div><p className="font-medium text-sm">{u.full_name}</p><p className="text-xs text-muted-foreground">{u.email}</p></div></TableCell>
                 <TableCell><Badge variant="outline" className="text-xs capitalize">{u.role}</Badge></TableCell>
-                <TableCell>{u.orders}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{u.joined}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{u.created_at}</TableCell>
                 <TableCell><StatusBadge status={u.status} /></TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { 
+                      setSelectedUser(u); 
+                      setEditRole(u.role);
+                      setEditStatus(u.status);
+                      setIsViewOpen(true); 
+                      }}><Eye className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8"><Mail className="h-4 w-4" /></Button>
                     {u.status === "active" ? <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><XCircle className="h-4 w-4" /></Button> : <Button variant="ghost" size="icon" className="h-8 w-8 text-success"><CheckCircle className="h-4 w-4" /></Button>}
                   </div>
@@ -471,7 +987,97 @@ const UsersSection = () => {
             ))}
           </TableBody>
         </Table>
+        {meta && meta.total > meta.limit && (
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <Button
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Prev
+          </Button>
+
+          <span>
+            Page {meta.page} of {Math.ceil(meta.total / meta.limit)}
+          </span>
+
+          <Button
+            disabled={page * meta.limit >= meta.total}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </Button>
+        </div>
+      )}
       </div>
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>User Details</DialogTitle>
+        </DialogHeader>
+
+        {selectedUser && (
+          <div className="space-y-2">
+            <p><strong>ID:</strong> {selectedUser.id}</p>
+            <p><strong>Name:</strong> {selectedUser.full_name}</p>
+            <p><strong>Email:</strong> {selectedUser.email}</p>
+            <div>
+              <label>Role</label>
+
+              <Select value={editRole} onValueChange={(value) => setEditRole(value as Role)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="buyer">Buyer</SelectItem>
+                  <SelectItem value="contributor">Contributor</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label>Status</label>
+
+              <Select value={editStatus} onValueChange={(value) => setEditStatus(value as Status)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p><strong>Created:</strong> {selectedUser.created_at}</p>
+            <p><strong>Updated:</strong> {selectedUser.updated_at}</p>
+          </div>
+        )}
+        <Button
+          onClick={async () => {
+            try {
+              await updateUserAdmin(selectedUser.id, {
+                role: editRole,
+                status: editStatus,
+              });
+              
+            } catch(error ) {
+              const message = error.data.message || error.data || "An error occurred while updating the user.";
+              toast({
+                title: "Error",
+                description: message,
+                variant: "destructive",
+              });
+            }
+          setIsViewOpen(false);
+            
+          }} 
+        >
+          Save Changes
+        </Button>
+      </DialogContent>
+      
+    </Dialog>
     </div>
   );
 };

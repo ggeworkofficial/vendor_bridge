@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Layout from "@/components/Layout";
 import QualityBadge from "@/components/QualityBadge";
-import { mockProducts } from "@/lib/mock-data";
+import { mockProducts } from "@/lib/mock-products";
 import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
 

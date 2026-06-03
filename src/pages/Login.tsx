@@ -6,16 +6,53 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/Layout";
 import logo from "@/assets/logo.png";
+import { login, register } from "@/api/auth.api";
+import { useAuth } from "@/features/auth/auth.store";
 
 const Login = () => {
   const [isRegister, setIsRegister] = useState(false);
+  const setUser = useAuth((state) => state.setUser);
+
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({ title: isRegister ? "Account Created!" : "Welcome back!", description: "Redirecting..." });
-    setTimeout(() => navigate("/"), 1000);
+    try {
+      const formData = new FormData(e.target as HTMLFormElement);
+      const email = formData.get("email") as string;
+      const password = formData.get("password") as string;
+
+      if (isRegister) {
+        const name = formData.get("name") as string;
+        await register({ name, email, password });
+        toast({
+          title: "Registration successful",
+          description: "You can now log in with your credentials",
+        });
+        setIsRegister(false);
+      } else {
+        const response = await login({ email, password });
+        setUser(response.data.user);
+        toast({
+          title: "Login successful",
+          description: `Welcome back, ${response.data.user.full_name}!`,
+        });
+        navigate("/");
+      }
+
+    } catch(error) {
+      const message =
+        error?.response?.data?.message || 
+        error?.message ||              
+        "An error occurred";
+
+      toast({
+        title: "Authentication failed",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -31,12 +68,12 @@ const Login = () => {
 
         <form onSubmit={handleSubmit} className="bg-card border rounded-lg p-6 space-y-4">
           {isRegister && (
-            <div><Label>Full Name</Label><Input required placeholder="Full Name" /></div>
+            <div><Label>Full Name</Label><Input name="full_name" required placeholder="Full Name" /></div>
           )}
-          <div><Label>Email</Label><Input required type="email" placeholder="you@example.com" /></div>
-          <div><Label>Password</Label><Input required type="password" placeholder="••••••••" /></div>
+          <div><Label>Email</Label><Input name="email" required type="email" placeholder="you@example.com" /></div>
+          <div><Label>Password</Label><Input name="password" required type="password" placeholder="••••••••" /></div>
           {isRegister && (
-            <div><Label>Confirm Password</Label><Input required type="password" placeholder="••••••••" /></div>
+            <div><Label>Confirm Password</Label><Input name="confirm_password" required type="password" placeholder="••••••••" /></div>
           )}
           <Button type="submit" className="w-full">{isRegister ? "Create Account" : "Sign In"}</Button>
         </form>

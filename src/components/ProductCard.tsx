@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ShoppingCart, BadgeCheck, Star, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Product } from "@/lib/types";
+import { InventoryProduct } from "@/types/inventory";
 import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
 
@@ -12,8 +12,10 @@ const qualityColors: Record<string, string> = {
   low: "bg-destructive text-destructive-foreground",
 };
 
-const ProductCard = ({ product, index = 0 }: { product: Product; index?: number }) => {
+const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?: number }) => {
   const { addItem } = useCart();
+
+  const productImage = product.images[0]?.image_url || "";
 
   return (
     <motion.div
@@ -25,7 +27,7 @@ const ProductCard = ({ product, index = 0 }: { product: Product; index?: number 
       <Link to={`/product/${product.id}`} className="block">
         <div className="relative aspect-square bg-muted overflow-hidden">
           <img
-            src={product.images[0]}
+            src={productImage}
             alt={product.name}
             loading="lazy"
             width={640}
@@ -33,8 +35,8 @@ const ProductCard = ({ product, index = 0 }: { product: Product; index?: number 
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-2 left-2 flex gap-1.5">
-            <Badge className={qualityColors[product.qualityLabel] + " text-xs"}>
-              {product.qualityLabel}
+            <Badge className={qualityColors[product.quality_label] + " text-xs"}>
+              {product.quality_label}
             </Badge>
             {product.verified && (
               <Badge variant="secondary" className="gap-1 text-xs bg-primary text-primary-foreground">
@@ -63,12 +65,25 @@ const ProductCard = ({ product, index = 0 }: { product: Product; index?: number 
           <span>{product.location}</span>
         </div>
         <div className="flex items-center justify-between pt-2">
-          <span className="text-lg font-display font-bold">${product.price.toFixed(2)}</span>
+          <span className="text-lg font-display font-bold">${Number(product.price).toFixed(2)}</span>
           <Button
             size="sm"
             onClick={(e) => {
               e.preventDefault();
-              addItem(product);
+              addItem({
+                id: product.id,
+                name: product.name,
+                description: product.description,
+                price: product.price,
+                qualityLabel: product.quality_label,
+                verified: product.verified,
+                images: [product.images[0]?.image_url || ""],
+                category: product.category.name,
+                location: product.location,
+                lastUpdated: product.updated_at,
+                rating: product.rating,
+                reviewCount: product.reviewCount,
+              });
             }}
           >
             <ShoppingCart className="h-4 w-4 mr-1" />

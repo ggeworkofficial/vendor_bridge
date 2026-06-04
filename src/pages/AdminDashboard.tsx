@@ -21,20 +21,23 @@ import { Progress } from "@/components/ui/progress";
 import logo from "@/assets/logo.png";
 import { mockOrders } from "@/lib/mock-data";
 import { mockProducts } from "@/lib/mock-products";
-import { mockSocialLinks, mockContactPhones, mockPaymentAccounts, type SocialLink, type ContactPhone, type PaymentAccount } from "@/lib/contact-data";
+import { mockSocialLinks, mockContactPhones, type SocialLink, type ContactPhone } from "@/lib/contact-data";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getUser, getUsers, UserQueryParam, updateUserAdmin } from "@/api/user.api";
-import { getInventory, getInventoryItem, updateInventory, deleteInventory } from "@/api/inventory.api";
+import { getInventory, getInventoryItem, updateInventory, deleteInventory, createInventory } from "@/api/inventory.api";
 import { getOrders, getOrder, updateOrder } from "@/api/order.api";
 import { getLogistics, getLogisticsItem, createLogistics, updateLogistics } from "@/api/logistics.api";
+import { getPaymentAccounts, getPaymentAccount, createPaymentAccount, updatePaymentAccount, deletePaymentAccount } from "@/api/payment-account.api";
+import { getReceipts, getReceipt, createReceipt, updateReceipt } from "@/api/receipt.api";
 import { useUserStore } from "@/features/user/user.store";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useOrderStore } from "@/features/order/order.store";
 import { useLogisticsStore } from "@/features/logistics/logistics.store";
+import { usePaymentAccountStore } from "@/features/payment-account.store";
+import { useReceiptStore } from "@/features/receipt.store";
 import { useToast } from "@/hooks/use-toast";
 import { keepPreviousData } from "@tanstack/react-query";
-import { createInventory } from "@/api/inventory.api";
 import { createLogisticsValidation } from "@/lib/validation/logistics";
 
 const sections = [
@@ -963,110 +966,599 @@ const OrdersSection = () => {
 };
 
 const PaymentsSection = () => {
-  const [selected, setSelected] = useState<typeof mockReceipts[0] | null>(null);
-  const [tab, setTab] = useState("all");
-  const filtered = tab === "all" ? mockReceipts : mockReceipts.filter((r) => r.status === tab);
+  const [accountSearch, setAccountSearch] = useState("");
+  const [accountPage, setAccountPage] = useState(1);
+  const [accountLimit] = useState(10);
+  const [isAccountCreateOpen, setIsAccountCreateOpen] = useState(false);
+  const [isAccountEditOpen, setIsAccountEditOpen] = useState(false);
+  const [isAccountDeleteOpen, setIsAccountDeleteOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+  const [accountCreateType, setAccountCreateType] = useState<"bank" | "telebirr" | "cbe_birr">("bank");
+  const [accountCreateLabel, setAccountCreateLabel] = useState("");
+  const [accountCreateName, setAccountCreateName] = useState("");
+  const [accountCreateNumber, setAccountCreateNumber] = useState("");
+  const [accountCreateDetails, setAccountCreateDetails] = useState("");
+  const [accountEditType, setAccountEditType] = useState<"bank" | "telebirr" | "cbe_birr">("bank");
+  const [accountEditLabel, setAccountEditLabel] = useState("");
+  const [accountEditName, setAccountEditName] = useState("");
+  const [accountEditNumber, setAccountEditNumber] = useState("");
+  const [accountEditDetails, setAccountEditDetails] = useState("");
+  const [isAccountSaving, setIsAccountSaving] = useState(false);
+  const [isAccountCreating, setIsAccountCreating] = useState(false);
+
+  const [receiptSearch, setReceiptSearch] = useState("");
+  const [receiptStatus, setReceiptStatus] = useState<"all" | "pending_review" | "approved" | "rejected">("all");
+  const [receiptMethod, setReceiptMethod] = useState<"all" | "full" | "advance" | "cod">("all");
+  const [receiptPage, setReceiptPage] = useState(1);
+  const [receiptLimit] = useState(10);
+  const [isReceiptViewOpen, setIsReceiptViewOpen] = useState(false);
+  const [isReceiptUploadOpen, setIsReceiptUploadOpen] = useState(false);
+  const [isReceiptCreating, setIsReceiptCreating] = useState(false);
+  const [isReceiptSaving, setIsReceiptSaving] = useState(false);
+  const [receiptUploadOrderId, setReceiptUploadOrderId] = useState("");
+  const [receiptUploadAccount, setReceiptUploadAccount] = useState("");
+  const [receiptUploadNote, setReceiptUploadNote] = useState("");
+  const [receiptUploadFile, setReceiptUploadFile] = useState<File | null>(null);
+  const [receiptEditStatus, setReceiptEditStatus] = useState<"pending_review" | "approved" | "rejected">("pending_review");
+  const [receiptEditNote, setReceiptEditNote] = useState("");
+
+  
+  const selectedPaymentAccount = usePaymentAccountStore((state) => state.selectedPaymentAccount);
+  const setPaymentAccounts = usePaymentAccountStore((state) => state.setPaymentAccounts);
+  const setSelectedPaymentAccount = usePaymentAccountStore((state) => state.setSelectedPaymentAccount);
+  const addPaymentAccount = usePaymentAccountStore((state) => state.addPaymentAccount);
+  const updatePaymentAccountInStore = usePaymentAccountStore((state) => state.updatePaymentAccount);
+  const removePaymentAccount = usePaymentAccountStore((state) => state.removePaymentAccount);
+
+  const selectedReceipt = useReceiptStore((state) => state.selectedReceipt);
+  const setReceipts = useReceiptStore((state) => state.setReceipts);
+  const setSelectedReceipt = useReceiptStore((state) => state.setSelectedReceipt);
+  const addReceipt = useReceiptStore((state) => state.addReceipt);
+  const updateReceiptInStore = useReceiptStore((state) => state.updateReceipt);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const usePaymentAccountsQuery = (params: any) =>
+    useQuery({
+      queryKey: ["payment-accounts", params],
+      queryFn: async () => await getPaymentAccounts(params),
+      placeholderData: keepPreviousData,
+    });
+  const useReceiptsQuery = (params: any) =>
+    useQuery({
+      queryKey: ["receipts", params],
+      queryFn: async () => await getReceipts(params),
+      placeholderData: keepPreviousData,
+    });
+
+  const paymentAccountsResponse = usePaymentAccountsQuery({
+    page: accountPage,
+    limit: accountLimit,
+    ...(accountSearch ? { search: accountSearch } : {}),
+    order: "asc",
+  });
+  const paymentAccounts =
+  paymentAccountsResponse.data?.data?.data ?? [];
+
+
+  const receiptStatusParam = receiptStatus === "all" ? undefined : receiptStatus;
+  const receiptMethodParam = receiptMethod === "all" ? undefined : receiptMethod;
+
+  const receiptsResponse = useReceiptsQuery({
+    page: receiptPage,
+    limit: receiptLimit,
+    ...(receiptSearch ? { search: receiptSearch } : {}),
+    ...(receiptStatusParam ? { status: receiptStatusParam } : {}),
+    ...(receiptMethodParam ? { payment_method: receiptMethodParam } : {}),
+    sort: "created_at",
+    order: "desc",
+  });
+  const receipts =
+    receiptsResponse.data?.data?.data ?? [];
+  const receiptMeta = receiptsResponse.data?.data?.meta;
+  const accountMeta = paymentAccountsResponse.data?.data?.meta;
+
+  const paymentAccountsData = paymentAccountsResponse.data?.data?.data ?? [];
+  const receiptsData = receiptsResponse.data?.data?.data ?? [];
+
+  const pendingCount = receiptsData.filter((receipt) => receipt.status === "pending_review").length;
+  const approvedCount = receiptsData.filter((receipt) => receipt.status === "approved").length;
+  const totalCollected = receiptsData.reduce((sum, receipt) => sum + Number(receipt.amount || "0"), 0);
+
+  const loadPaymentAccount = async (id: string) => {
+    try {
+      const { data } = await getPaymentAccount(id);
+      setSelectedPaymentAccount(data);
+      setAccountEditType(data.type);
+      setAccountEditLabel(data.label);
+      setAccountEditName(data.account_name);
+      setAccountEditNumber(data.account_number);
+      setAccountEditDetails(data.details ?? "");
+      setIsAccountEditOpen(true);
+    } catch (error) {
+      toast({ title: "Unable to load account", description: "Failed to retrieve payment account details.", variant: "destructive" });
+    }
+  };
+
+  const handleCreatePaymentAccount = async () => {
+    if (!accountCreateLabel || !accountCreateName || !accountCreateNumber) {
+      toast({ title: "Validation error", description: "Fill in all required fields.", variant: "destructive" });
+      return;
+    }
+
+    setIsAccountCreating(true);
+    try {
+      const { data } = await createPaymentAccount({
+        type: accountCreateType,
+        label: accountCreateLabel,
+        account_name: accountCreateName,
+        account_number: accountCreateNumber,
+        details: accountCreateDetails || undefined,
+      });
+
+      addPaymentAccount(data);
+      queryClient.invalidateQueries({ queryKey: ["payment-accounts"] });
+      toast({ title: "Payment account created" });
+      setIsAccountCreateOpen(false);
+      setAccountCreateType("bank");
+      setAccountCreateLabel("");
+      setAccountCreateName("");
+      setAccountCreateNumber("");
+      setAccountCreateDetails("");
+    } catch (error) {
+      toast({ title: "Create failed", description: "Unable to create payment account.", variant: "destructive" });
+    } finally {
+      setIsAccountCreating(false);
+    }
+  };
+
+  const handleUpdatePaymentAccount = async () => {
+    if (!selectedPaymentAccount) return;
+    setIsAccountSaving(true);
+    try {
+      const { data } = await updatePaymentAccount(selectedPaymentAccount.id, {
+        type: accountEditType,
+        label: accountEditLabel,
+        account_name: accountEditName,
+        account_number: accountEditNumber,
+        details: accountEditDetails || undefined,
+      });
+
+      updatePaymentAccountInStore(data);
+      setSelectedPaymentAccount(data);
+      queryClient.invalidateQueries({ queryKey: ["payment-accounts"] });
+      toast({ title: "Payment account updated" });
+      setIsAccountEditOpen(false);
+    } catch (error) {
+      toast({ title: "Update failed", description: "Unable to save payment account.", variant: "destructive" });
+    } finally {
+      setIsAccountSaving(false);
+    }
+  };
+
+  const handleDeletePaymentAccount = async () => {
+    if (!accountToDelete) return;
+    try {
+      await deletePaymentAccount(accountToDelete);
+      removePaymentAccount(accountToDelete);
+      queryClient.invalidateQueries({ queryKey: ["payment-accounts"] });
+      toast({ title: "Payment account deleted" });
+    } catch (error) {
+      toast({ title: "Delete failed", description: "Unable to remove payment account.", variant: "destructive" });
+    } finally {
+      setAccountToDelete(null);
+      setIsAccountDeleteOpen(false);
+    }
+  };
+
+  const loadReceipt = async (id: string) => {
+    try {
+      const { data } = await getReceipt(id);
+      setSelectedReceipt(data);
+      setReceiptEditStatus(data.status);
+      setReceiptEditNote(data.note);
+      setIsReceiptViewOpen(true);
+    } catch (error) {
+      toast({ title: "Unable to load receipt", description: "Failed to retrieve receipt details.", variant: "destructive" });
+    }
+  };
+
+  const handleCreateReceipt = async () => {
+    if (!receiptUploadOrderId || !receiptUploadAccount || !receiptUploadFile) {
+      toast({ title: "Validation error", description: "Order, account and image are required.", variant: "destructive" });
+      return;
+    }
+
+    setIsReceiptCreating(true);
+    try {
+      const formData = new FormData();
+      formData.append("order_id", receiptUploadOrderId);
+      formData.append("account", receiptUploadAccount);
+      formData.append("note", receiptUploadNote);
+      formData.append("images", receiptUploadFile);
+
+      const { data } = await createReceipt(formData);
+      addReceipt(data);
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      toast({ title: "Receipt uploaded" });
+      setIsReceiptUploadOpen(false);
+      setReceiptUploadOrderId("");
+      setReceiptUploadAccount("");
+      setReceiptUploadNote("");
+      setReceiptUploadFile(null);
+    } catch (error) {
+      toast({ title: "Upload failed", description: "Unable to upload receipt.", variant: "destructive" });
+    } finally {
+      setIsReceiptCreating(false);
+    }
+  };
+
+  const handleSaveReceipt = async () => {
+    if (!selectedReceipt) return;
+    setIsReceiptSaving(true);
+    try {
+      const { data } = await updateReceipt(selectedReceipt.id, {
+        status: receiptEditStatus,
+        note: receiptEditNote,
+      });
+
+      updateReceiptInStore(data);
+      setSelectedReceipt(data);
+      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      toast({ title: "Receipt updated" });
+      setIsReceiptViewOpen(false);
+    } catch (error) {
+      toast({ title: "Update failed", description: "Unable to save receipt.", variant: "destructive" });
+    } finally {
+      setIsReceiptSaving(false);
+    }
+  };
+
+
+  useEffect(() => setAccountPage(1), [accountSearch]);
+  // useEffect(() => setReceiptPage(1), [receiptSearch, receiptStatus, receiptMethod]);
+  //   useEffect(() => {
+  //     setPaymentAccounts(paymentAccountsData);
+  //   }, [paymentAccountsData]);
+  // useEffect(() => setReceipts(receiptsData), [receiptsData, setReceipts]);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard label="Pending Review" value={String(mockReceipts.filter(r => r.status === "pending_review").length)} change="Needs attention" positive={false} icon={Receipt} />
-        <StatCard label="Approved" value={String(mockReceipts.filter(r => r.status === "approved").length)} change="This week" icon={CheckCircle} />
-        <StatCard label="Total Collected" value="$201.87" change="Via transfers" icon={DollarSign} />
+        <StatCard label="Pending Review" value={String(pendingCount)} change="Needs attention" positive={false} icon={Receipt} />
+        <StatCard label="Approved" value={String(approvedCount)} change="This week" icon={CheckCircle} />
+        <StatCard label="Total Collected" value={`$${totalCollected.toFixed(2)}`} change="From receipts" icon={DollarSign} />
       </div>
 
-      <div>
-        <h3 className="font-display font-semibold mb-3">Payment Accounts</h3>
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 items-start">
+          <h3 className="font-display font-semibold">Payment Accounts</h3>
+          <Button onClick={() => setIsAccountCreateOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Payment Account
+          </Button>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={accountSearch} onChange={(e) => setAccountSearch(e.target.value)} className="pl-9" placeholder="Search accounts..." />
+          </div>
+        </div>
+
         <div className="grid sm:grid-cols-2 gap-3">
-          {mockPaymentAccounts.map((acc) => (
-            <div key={acc.id} className="border rounded-lg p-4 flex items-center justify-between">
+          {paymentAccounts.map((account) => (
+            <div key={account.id} className="border rounded-lg p-4 flex flex-col justify-between gap-3">
               <div>
-                <p className="font-medium text-sm">{acc.label}</p>
-                <p className="text-xs text-muted-foreground">{acc.accountName} · {acc.accountNumber}</p>
+                <p className="font-medium text-sm">{account.label}</p>
+                <p className="text-xs text-muted-foreground">{account.account_name} · {account.account_number}</p>
+                <Badge variant="outline" className="text-xs capitalize mt-2">{account.type.replace("_", " ")}</Badge>
               </div>
-              <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
+              <div className="flex items-center justify-end gap-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadPaymentAccount(account.id)}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => { setAccountToDelete(account.id); setIsAccountDeleteOpen(true); }}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           ))}
-          <button className="border-2 border-dashed rounded-lg p-4 text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors flex items-center justify-center gap-2 text-sm">
-            <Plus className="h-4 w-4" /> Add Payment Account
-          </button>
         </div>
+
+        {accountMeta && accountMeta.total > accountMeta.limit && (
+          <div className="flex items-center justify-center gap-4 mt-3">
+            <Button disabled={accountPage === 1} onClick={() => setAccountPage((current) => current - 1)}>Prev</Button>
+            <span>Page {accountMeta.page} of {Math.ceil(accountMeta.total / accountMeta.limit)}</span>
+            <Button disabled={accountPage * accountMeta.limit >= accountMeta.total} onClick={() => setAccountPage((current) => current + 1)}>Next</Button>
+          </div>
+        )}
       </div>
 
-      <div>
-        <h3 className="font-display font-semibold mb-3">Uploaded Receipts</h3>
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="all">All ({mockReceipts.length})</TabsTrigger>
-            <TabsTrigger value="pending_review">Pending Review</TabsTrigger>
-            <TabsTrigger value="approved">Approved</TabsTrigger>
-            <TabsTrigger value="rejected">Rejected</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="border rounded-lg overflow-hidden mt-3">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row gap-3 items-start">
+          <h3 className="font-display font-semibold">Uploaded Receipts</h3>
+          <Button variant="secondary" onClick={() => setIsReceiptUploadOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Upload Receipt
+          </Button>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} className="pl-9" placeholder="Search receipts..." />
+          </div>
+          <Select value={receiptStatus} onValueChange={(v) => setReceiptStatus(v as any)}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="pending_review">Pending Review</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={receiptMethod} onValueChange={(v) => setReceiptMethod(v as any)}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Methods</SelectItem>
+              <SelectItem value="full">Full</SelectItem>
+              <SelectItem value="advance">Advance</SelectItem>
+              <SelectItem value="cod">Cash on Delivery</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Receipt</TableHead>
-                <TableHead>Order</TableHead>
+                <TableHead>Receipt ID</TableHead>
+                <TableHead>Order ID</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Amount</TableHead>
-                <TableHead>Method</TableHead>
+                <TableHead>Payment Method</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Created At</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((r) => (
-                <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                  <TableCell className="font-medium">{r.id}</TableCell>
-                  <TableCell>{r.orderId}</TableCell>
-                  <TableCell>{r.customer}</TableCell>
-                  <TableCell className="font-medium">{r.amount}</TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs capitalize">{r.method === "advance" ? "Advance 30%" : "Full"}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{r.account}</TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
+              {receipts.map((receipt) => (
+                <TableRow key={receipt.id}>
+                  <TableCell className="font-medium">{receipt.id}</TableCell>
+                  <TableCell className="font-medium">{receipt.order.id}</TableCell>
+                  <TableCell>{receipt.order.user.full_name}</TableCell>
+                  <TableCell className="font-medium">${receipt.amount}</TableCell>
+                  <TableCell><Badge variant="outline" className="text-xs capitalize">{receipt.payment_method}</Badge></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{receipt.account}</TableCell>
+                  <TableCell><StatusBadge status={receipt.status} /></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{receipt.created_at}</TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8"><Eye className="h-4 w-4" /></Button>
-                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadReceipt(receipt.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+
+        {receiptMeta && receiptMeta.total > receiptMeta.limit && (
+          <div className="flex items-center justify-center gap-4 mt-4">
+            <Button disabled={receiptPage === 1} onClick={() => setReceiptPage((current) => current - 1)}>Prev</Button>
+            <span>Page {receiptMeta.page} of {Math.ceil(receiptMeta.total / receiptMeta.limit)}</span>
+            <Button disabled={receiptPage * receiptMeta.limit >= receiptMeta.total} onClick={() => setReceiptPage((current) => current + 1)}>Next</Button>
+          </div>
+        )}
       </div>
 
-      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={isAccountCreateOpen} onOpenChange={setIsAccountCreateOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Receipt {selected?.id}</DialogTitle>
-            <DialogDescription>Order {selected?.orderId} · {selected?.customer}</DialogDescription>
+            <DialogTitle>Add Payment Account</DialogTitle>
+            <DialogDescription>Create a new payment account for transfers.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><p className="text-muted-foreground text-xs">Amount</p><p className="font-semibold">{selected?.amount}</p></div>
-              <div><p className="text-muted-foreground text-xs">Method</p><p className="font-medium capitalize">{selected?.method}</p></div>
-              <div><p className="text-muted-foreground text-xs">Account Used</p><p className="font-medium">{selected?.account}</p></div>
-              <div><p className="text-muted-foreground text-xs">Uploaded</p><p className="font-medium">{selected?.uploadedAt}</p></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Type</Label>
+              <Select value={accountCreateType} onValueChange={(v: any) => setAccountCreateType(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="telebirr">Telebirr</SelectItem>
+                  <SelectItem value="cbe_birr">CBE Birr</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="bg-muted/50 rounded-lg p-8 flex flex-col items-center gap-2">
-              <ImageIcon className="h-10 w-10 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Receipt image preview</p>
-              <p className="text-xs text-muted-foreground">(In production, the uploaded receipt image would display here)</p>
+            <div className="col-span-2 space-y-1">
+              <Label>Label</Label>
+              <Input value={accountCreateLabel} onChange={(e) => setAccountCreateLabel(e.target.value)} />
             </div>
-            {selected?.note && <p className="text-sm bg-accent/50 p-3 rounded-lg"><span className="font-medium">Note:</span> {selected.note}</p>}
-            <div><Label>Admin Note</Label><Textarea placeholder="Add a note about this receipt..." rows={2} /></div>
+            <div className="space-y-1">
+              <Label>Account Name</Label>
+              <Input value={accountCreateName} onChange={(e) => setAccountCreateName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Account Number</Label>
+              <Input value={accountCreateNumber} onChange={(e) => setAccountCreateNumber(e.target.value)} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Details</Label>
+              <Textarea value={accountCreateDetails} onChange={(e) => setAccountCreateDetails(e.target.value)} rows={3} />
+            </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setSelected(null)}>Close</Button>
-            <Button variant="destructive">Reject</Button>
-            <Button className="bg-success hover:bg-success/90">Approve</Button>
+            <Button variant="outline" onClick={() => setIsAccountCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreatePaymentAccount} disabled={isAccountCreating}>{isAccountCreating ? "Creating..." : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAccountEditOpen} onOpenChange={(open) => !open && setSelectedPaymentAccount(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Payment Account</DialogTitle>
+            <DialogDescription>Update payment account details.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Type</Label>
+              <Select value={accountEditType} onValueChange={(v: any) => setAccountEditType(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bank">Bank</SelectItem>
+                  <SelectItem value="telebirr">Telebirr</SelectItem>
+                  <SelectItem value="cbe_birr">CBE Birr</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Label</Label>
+              <Input value={accountEditLabel} onChange={(e) => setAccountEditLabel(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Account Name</Label>
+              <Input value={accountEditName} onChange={(e) => setAccountEditName(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Account Number</Label>
+              <Input value={accountEditNumber} onChange={(e) => setAccountEditNumber(e.target.value)} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Details</Label>
+              <Textarea value={accountEditDetails} onChange={(e) => setAccountEditDetails(e.target.value)} rows={3} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsAccountEditOpen(false); setSelectedPaymentAccount(null); }}>Cancel</Button>
+            <Button onClick={handleUpdatePaymentAccount} disabled={isAccountSaving}>{isAccountSaving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAccountDeleteOpen} onOpenChange={setIsAccountDeleteOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delete Payment Account</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Are you sure you want to delete this payment account?</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsAccountDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeletePaymentAccount}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isReceiptUploadOpen} onOpenChange={setIsReceiptUploadOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upload Receipt</DialogTitle>
+            <DialogDescription>Upload a receipt for a customer order.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 space-y-1">
+              <Label>Order ID</Label>
+              <Input value={receiptUploadOrderId} onChange={(e) => setReceiptUploadOrderId(e.target.value)} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Account</Label>
+              <Input value={receiptUploadAccount} onChange={(e) => setReceiptUploadAccount(e.target.value)} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Note</Label>
+              <Textarea value={receiptUploadNote} onChange={(e) => setReceiptUploadNote(e.target.value)} rows={3} />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>Receipt Image</Label>
+              <Input type="file" accept="image/*" onChange={(e) => setReceiptUploadFile(e.target.files?.[0] ?? null)} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsReceiptUploadOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateReceipt} disabled={isReceiptCreating}>{isReceiptCreating ? "Uploading..." : "Upload"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isReceiptViewOpen} onOpenChange={(open) => !open && setSelectedReceipt(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Receipt Details</DialogTitle>
+            <DialogDescription>{selectedReceipt?.id}</DialogDescription>
+          </DialogHeader>
+          {selectedReceipt ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground text-xs">Receipt ID</p>
+                  <p className="font-medium">{selectedReceipt.id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Order ID</p>
+                  <p className="font-medium">{selectedReceipt.order.id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Customer Name</p>
+                  <p className="font-medium">{selectedReceipt.order.user.full_name}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Customer ID</p>
+                  <p className="font-medium text-xs">{selectedReceipt.order.user.id}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Amount</p>
+                  <p className="font-medium">${selectedReceipt.amount}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Payment Method</p>
+                  <p className="font-medium capitalize">{selectedReceipt.payment_method}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Account</p>
+                  <p className="font-medium">{selectedReceipt.account}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Status</p>
+                  <Badge variant="outline" className="text-xs capitalize">{selectedReceipt.status}</Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Created At</p>
+                  <p className="font-medium text-xs">{selectedReceipt.created_at}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Updated At</p>
+                  <p className="font-medium text-xs">{selectedReceipt.updated_at}</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <Label>Status</Label>
+                  <Select value={receiptEditStatus} onValueChange={(v: any) => setReceiptEditStatus(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending_review">Pending Review</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label>Note</Label>
+                  <Textarea value={receiptEditNote} onChange={(e) => setReceiptEditNote(e.target.value)} rows={3} />
+                </div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Receipt Image</p>
+                  <img src={selectedReceipt.file_url} alt="Receipt" className="w-full rounded-lg border" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsReceiptViewOpen(false); setSelectedReceipt(null); }}>Close</Button>
+            <Button onClick={handleSaveReceipt} disabled={isReceiptSaving || !selectedReceipt}>{isReceiptSaving ? "Saving..." : "Save Changes"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

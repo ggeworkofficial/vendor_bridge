@@ -1,32 +1,97 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, ShieldCheck, Truck, Star } from "lucide-react";
+import { ArrowRight, ShieldCheck, Truck, Star, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ProductCard from "@/components/ProductCard";
 import Layout from "@/components/Layout";
-import { mockProducts } from "@/lib/mock-products";
 import { categories } from "@/lib/mock-data";
 import heroBg from "@/assets/hero-bg.jpg";
 import { Link } from "react-router-dom";
+import { useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { getInventory } from "@/api/inventory.api";
+import { useInventoryStore } from "@/features/inventory/inventory.store";
+import { keepPreviousData } from "@tanstack/react-query";
 
 const Index = () => {
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get("search") || "";
   const categoryParam = searchParams.get("category") || "All";
   const [activeCategory, setActiveCategory] = useState(categoryParam);
+  const [page] = useState(1);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
+  const inventory = useInventoryStore((state) => state.inventory);
+  const setInventory = useInventoryStore((state) => state.setInventory);
+
+  const {
+      data,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage,
+      isLoading,
+      error,
+    } = useInfiniteQuery({
+      queryKey: ["inventory", searchQuery],
+      queryFn: ({ pageParam = 1 }) =>
+        getInventory({
+          search: searchQuery || undefined,
+          page: pageParam,
+          limit: 20,
+        }),
+      getNextPageParam: (lastPage) => {
+        const meta = lastPage.data.meta;
+
+        const currentPage = meta.page;
+        const totalPages = Math.ceil(meta.total / meta.limit);
+
+        return currentPage < totalPages
+          ? currentPage + 1
+          : undefined;
+      },
+      initialPageParam: 1,
+    });
+
+  useEffect(() => {
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (
+        entries[0].isIntersecting &&
+        hasNextPage
+      ) {
+        fetchNextPage();
+      }
+    },
+    {
+      threshold: 0.5,
+    }
+  );
+
+  const node = loadMoreRef.current;
+
+  if (node) {
+    observer.observe(node);
+  }
+
+  return () => {
+    if (node) {
+      observer.unobserve(node);
+    }
+  };
+}, [fetchNextPage, hasNextPage]);
+
+  const products = data?.pages.flatMap((page) => page.data.data) ?? [];
 
   const filteredProducts = useMemo(() => {
-    return mockProducts.filter((p) => {
-      const matchesCategory = activeCategory === "All" || p.category === activeCategory;
-      const matchesSearch =
-        !searchQuery ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    });
-  }, [activeCategory, searchQuery]);
+  return products.filter((p) => {
+    const matchesCategory =
+      activeCategory === "All" ||
+      p.category.name === activeCategory;
+
+    return matchesCategory;
+  });
+}, [products, activeCategory]);
 
   return (
     <Layout>
@@ -87,7 +152,9 @@ const Index = () => {
           <h2 className="text-2xl font-display font-bold">
             {searchQuery ? `Results for "${searchQuery}"` : "Featured Products"}
           </h2>
-          <span className="text-sm text-muted-foreground">{filteredProducts.length} products</span>
+          <span className="text-sm text-muted-foreground">
+            {isLoading ? "Loading..." : `${filteredProducts.length} products`}
+          </span>
         </div>
 
         {/* Category filter */}
@@ -105,12 +172,34 @@ const Index = () => {
           ))}
         </div>
 
-        {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.map((product, i) => (
-              <ProductCard key={product.id} product={product} index={i} />
-            ))}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
+        ) : error ? (
+          <div className="text-center py-20 text-destructive">
+            <p className="text-lg mb-4">Failed to load products.</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        ) : filteredProducts.length > 0 ? (
+          <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredProducts.map((product, i) => (
+                  <ProductCard key={product.id} product={product} index={i} />
+                ))}
+              </div>
+
+              <div className="mt-8 flex justify-center">
+                {isFetchingNextPage && (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                )}
+              </div>
+
+              <div ref={loadMoreRef} />
+            </>
+          
         ) : (
           <div className="text-center py-20 text-muted-foreground">
             <p className="text-lg">No products found.</p>

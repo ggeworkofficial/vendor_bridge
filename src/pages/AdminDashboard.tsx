@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import {
   BarChart3, Package, Truck, ShoppingBag, Users, Store,
   AlertTriangle, TrendingUp, Home, Search, MoreHorizontal,
@@ -30,19 +30,22 @@ import { getOrders, getOrder, updateOrder } from "@/api/order.api";
 import { getLogistics, getLogisticsItem, createLogistics, updateLogistics } from "@/api/logistics.api";
 import { getPaymentAccounts, getPaymentAccount, createPaymentAccount, updatePaymentAccount, deletePaymentAccount } from "@/api/payment-account.api";
 import { getReceipts, getReceipt, createReceipt, updateReceipt } from "@/api/receipt.api";
+import { getCategories, getCategory, createCategory, updateCategory, deleteCategory } from "@/api/category.api";
 import { useUserStore } from "@/features/user/user.store";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useOrderStore } from "@/features/order/order.store";
 import { useLogisticsStore } from "@/features/logistics/logistics.store";
 import { usePaymentAccountStore } from "@/features/payment-account.store";
 import { useReceiptStore } from "@/features/receipt.store";
+import { useCategoryStore } from "@/features/category.store";
 import { useToast } from "@/hooks/use-toast";
 import { keepPreviousData } from "@tanstack/react-query";
-import { createLogisticsValidation } from "@/lib/validation/logistics";
+
 
 const sections = [
   { key: "dashboard", label: "Dashboard", icon: BarChart3 },
   { key: "inventory", label: "Inventory", icon: Package },
+  { key: "categories", label: "Categories", icon: CreditCard },
   { key: "orders", label: "Orders", icon: ShoppingBag },
   { key: "payments", label: "Payments & Receipts", icon: Receipt },
   { key: "logistics", label: "Logistics", icon: Truck },
@@ -723,6 +726,329 @@ const InventorySection = () => {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+const CategorySection = () => {
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"name" | "created_at">("name");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+  const [createName, setCreateName] = useState("");
+  const [editName, setEditName] = useState("");
+
+  const categories = useCategoryStore((state) => state.categories);
+  const selectedCategory = useCategoryStore((state) => state.selectedCategory);
+  const setCategories = useCategoryStore((state) => state.setCategories);
+  const setSelectedCategory = useCategoryStore((state) => state.setSelectedCategory);
+  const addCategory = useCategoryStore((state) => state.addCategory);
+  const updateCategory = useCategoryStore((state) => state.updateCategory);
+  const removeCategory = useCategoryStore((state) => state.removeCategory);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const useCategories = (params: any) =>
+    useQuery({
+      queryKey: ["categories", params],
+      queryFn: async () => await getCategories(params),
+      placeholderData: keepPreviousData,
+    });
+
+  const response = useCategories({
+    page,
+    limit,
+    ...(search ? { search } : {}),
+    sort,
+    order,
+  });
+
+  const categoriesData = response.data?.data?.data ?? [];
+  const categoriesMeta = response.data?.data?.meta;
+
+  useEffect(() => {
+  if (!response.data?.data?.data) return;
+
+  setCategories(response.data.data.data); // 👈 ONLY ARRAY
+}, [response.data?.data?.data]);
+
+  const loadCategoryDetails = async (id: string) => {
+    try {
+      const { data } = await getCategory(id);
+      setSelectedCategory(data);
+      setEditName(data.name);
+      setIsViewOpen(true);
+    } catch (error) {
+      toast({
+        title: "Unable to load category",
+        description: "Failed to fetch category details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadCategoryForEdit = async (id: string) => {
+    try {
+      const { data } = await getCategory(id);
+      setSelectedCategory(data);
+      setEditName(data.name);
+      setIsEditOpen(true);
+    } catch (error) {
+      toast({
+        title: "Unable to load category",
+        description: "Failed to fetch category details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!createName.trim()) {
+      toast({ title: "Validation error", description: "Name is required.", variant: "destructive" });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const { data } = await createCategory({ name: createName.trim() });
+      addCategory(data);
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category created" });
+      setIsCreateOpen(false);
+      setCreateName("");
+    } catch (error) {
+      toast({ title: "Create failed", description: "Unable to create category.", variant: "destructive" });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleUpdateCategory = async () => {
+    if (!selectedCategory) return;
+    if (!editName.trim()) {
+      toast({ title: "Validation error", description: "Name is required.", variant: "destructive" });
+      return;
+    }
+    console.log("Updating category with name:", editName);
+
+    setIsSaving(true);
+    try {
+     const d = await updateCategory(selectedCategory.id, { name: editName.trim() });
+     console.log("Update response:", d);
+      const { data } = await getCategory(selectedCategory.id); // Refetch to get updated data
+      updateCategory(data);
+      setSelectedCategory(data);
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category updated" });
+      setIsEditOpen(false);
+    } catch (error) {
+      toast({ title: "Update failed", description: error.message.data || error.message || "Unable to update category.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    try {
+      await deleteCategory(categoryToDelete);
+      removeCategory(categoryToDelete);
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category deleted" });
+    } catch (error) {
+      toast({ title: "Delete failed", description: "Unable to delete category.", variant: "destructive" });
+    } finally {
+      setCategoryToDelete(null);
+      setIsDeleteOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, sort, order]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-3 items-start">
+        <h3 className="font-display font-semibold">Categories</h3>
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Category
+        </Button>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Search categories..." />
+        </div>
+        <Select value={sort} onValueChange={(v) => setSort(v as "name" | "created_at")}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Sort by name</SelectItem>
+            <SelectItem value="created_at">Sort by created</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={order} onValueChange={(v) => setOrder(v as "asc" | "desc")}>
+          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="asc">Ascending</SelectItem>
+            <SelectItem value="desc">Descending</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Category ID</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Created At</TableHead>
+              <TableHead>Updated At</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {categories.map((category) => (
+              <TableRow key={category.id}>
+                <TableCell className="font-medium">{category.id}</TableCell>
+                <TableCell>{category.name}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{new Date(category.created_at).toLocaleDateString()}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{new Date(category.updated_at).toLocaleDateString()}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadCategoryDetails(category.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadCategoryForEdit(category.id)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => {
+                        setCategoryToDelete(category.id);
+                        setIsDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {categoriesMeta && categoriesMeta.total > categoriesMeta.limit && (
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <Button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+            Prev
+          </Button>
+          <span>Page {categoriesMeta.page} of {Math.ceil(categoriesMeta.total / categoriesMeta.limit)}</span>
+          <Button disabled={page * categoriesMeta.limit >= categoriesMeta.total} onClick={() => setPage((current) => current + 1)}>
+            Next
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Category</DialogTitle>
+            <DialogDescription>Create a new category.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateCategory} disabled={isCreating}>{isCreating ? "Creating..." : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={(open) => !open && setSelectedCategory(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Category</DialogTitle>
+            <DialogDescription>Update category name.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsEditOpen(false); setSelectedCategory(null); }}>Cancel</Button>
+            <Button onClick={handleUpdateCategory} disabled={isSaving}>{isSaving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isViewOpen} onOpenChange={(open) => !open && setSelectedCategory(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Category Details</DialogTitle>
+            <DialogDescription>{selectedCategory?.name}</DialogDescription>
+          </DialogHeader>
+          {selectedCategory ? (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground text-xs">Category ID</p>
+                <p className="font-medium">{selectedCategory.id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Created At</p>
+                <p className="font-medium text-xs">{new Date(selectedCategory.created_at).toLocaleDateString()}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-muted-foreground text-xs">Name</p>
+                <p className="font-medium">{selectedCategory.name}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-muted-foreground text-xs">Updated At</p>
+                <p className="font-medium text-xs">{new Date(selectedCategory.updated_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading category...</p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsViewOpen(false); setSelectedCategory(null); }}>Close</Button>
+            <Button onClick={() => { if (selectedCategory) { setIsViewOpen(false); setIsEditOpen(true); } }} disabled={!selectedCategory}>Edit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delete Category</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Are you sure you want to delete this category?</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteCategory}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2396,6 +2722,7 @@ const AdminDashboard = () => {
   const sectionContent: Record<string, React.ReactNode> = {
     dashboard: <DashboardSection />,
     inventory: <InventorySection />,
+    categories: <CategorySection />,
     orders: <OrdersSection />,
     payments: <PaymentsSection />,
     logistics: <LogisticsSection />,

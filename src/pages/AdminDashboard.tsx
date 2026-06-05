@@ -31,6 +31,7 @@ import { getLogistics, getLogisticsItem, createLogistics, updateLogistics } from
 import { getPaymentAccounts, getPaymentAccount, createPaymentAccount, updatePaymentAccount, deletePaymentAccount } from "@/api/payment-account.api";
 import { getReceipts, getReceipt, createReceipt, updateReceipt } from "@/api/receipt.api";
 import { getCategories, getCategory, createCategory, updateCategory, deleteCategory } from "@/api/category.api";
+import { getSellers, getSeller, createSeller, updateSeller, deleteSeller } from "@/api/seller.api";
 import { useUserStore } from "@/features/user/user.store";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useOrderStore } from "@/features/order/order.store";
@@ -38,6 +39,7 @@ import { useLogisticsStore } from "@/features/logistics/logistics.store";
 import { usePaymentAccountStore } from "@/features/payment-account.store";
 import { useReceiptStore } from "@/features/receipt.store";
 import { useCategoryStore } from "@/features/category.store";
+import { useSellerStore } from "@/features/seller.store";
 import { useToast } from "@/hooks/use-toast";
 import { keepPreviousData } from "@tanstack/react-query";
 
@@ -111,13 +113,7 @@ const PriorityBadge = ({ priority }: { priority: string }) => {
 
 // ─── Mock Data ───────────────────────────────────────────────
 
-const mockSellers = [
-  { id: "S001", name: "Artisan Leather Co.", location: "Marrakech, Morocco", products: 14, verified: true, revenue: "$12,400", contact: "+212 555 0101" },
-  { id: "S002", name: "Kerala Spice Farm", location: "Kerala, India", products: 8, verified: true, revenue: "$8,200", contact: "+91 555 0202" },
-  { id: "S003", name: "Jingdezhen Ceramics", location: "Jingdezhen, China", products: 22, verified: true, revenue: "$15,600", contact: "+86 555 0303" },
-  { id: "S004", name: "Bali Bamboo Works", location: "Bali, Indonesia", products: 6, verified: false, revenue: "$3,100", contact: "+62 555 0404" },
-  { id: "S005", name: "Nairobi Solar Hub", location: "Nairobi, Kenya", products: 4, verified: false, revenue: "$1,800", contact: "+254 555 0505" },
-];
+// Mock sellers removed - using backend integration
 
 const mockComplaints = [
   { id: "C001", user: "Sarah Kim", orderId: "ORD-001", subject: "Damaged product on arrival", status: "open", priority: "high", date: "2026-04-08", description: "The leather bag had a visible scratch on the front panel when delivered." },
@@ -2070,36 +2066,431 @@ const UsersSection = () => {
   );
 };
 
-const SellersSection = () => (
-  <div className="space-y-4">
-    <div className="flex justify-between items-center">
-      <p className="text-sm text-muted-foreground">Internal seller tracking — not visible to buyers</p>
-      <Button><Store className="h-4 w-4 mr-2" /> Add Seller</Button>
-    </div>
-    <div className="grid gap-4">
-      {mockSellers.map((s) => (
-        <div key={s.id} className="bg-card border rounded-lg p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-display font-semibold">{s.name}</h4>
-              {s.verified ? <Badge className="bg-success/10 text-success text-xs gap-1"><BadgeCheck className="h-3 w-3" />Verified</Badge> : <Badge variant="outline" className="text-xs text-muted-foreground">Unverified</Badge>}
-            </div>
-            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{s.location}</span>
-              <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" />{s.contact}</span>
-              <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5" />{s.products} products</span>
-            </div>
-          </div>
-          <div className="text-right"><p className="font-display font-bold text-lg">{s.revenue}</p><p className="text-xs text-muted-foreground">Total revenue</p></div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm"><Eye className="h-4 w-4 mr-1" />View</Button>
-            {!s.verified && <Button size="sm"><CheckCircle className="h-4 w-4 mr-1" />Verify</Button>}
-          </div>
+const SellersSection = () => {
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"name" | "created_at">("name");
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [sellerToDelete, setSellerToDelete] = useState<string | null>(null);
+  const [createUserId, setCreateUserId] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createLocation, setCreateLocation] = useState("");
+  const [createContact, setCreateContact] = useState("");
+  const [createVerified, setCreateVerified] = useState(false);
+  const [editUserId, setEditUserId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editContact, setEditContact] = useState("");
+  const [editVerified, setEditVerified] = useState(false);
+
+  const sellers = useSellerStore((state) => state.sellers);
+  const selectedSeller = useSellerStore((state) => state.selectedSeller);
+  const setSellers = useSellerStore((state) => state.setSellers);
+  const setSelectedSeller = useSellerStore((state) => state.setSelectedSeller);
+  const addSeller = useSellerStore((state) => state.addSeller);
+  const updateSellerInStore = useSellerStore((state) => state.updateSeller);
+  const removeSeller = useSellerStore((state) => state.removeSeller);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const useSellersQuery = (params: any) =>
+    useQuery({
+      queryKey: ["sellers", params],
+      queryFn: async () => await getSellers(params),
+      placeholderData: keepPreviousData,
+    });
+
+  const response = useSellersQuery({
+    page,
+    limit,
+    ...(search ? { search } : {}),
+    sort,
+    order,
+  });
+
+  const sellersData = response.data?.data?.data ?? [];
+  const sellersMeta = response.data?.data?.meta;
+
+  useEffect(() => {
+    if (!response.data?.data?.data) return;
+    setSellers(response.data.data.data);
+  }, [response.data?.data?.data, setSellers]);
+
+  const loadSellerDetails = async (id: string) => {
+    try {
+      const { data } = await getSeller(id);
+      setSelectedSeller(data);
+      setEditUserId(data.user.id);
+      setEditName(data.name);
+      setEditLocation(data.location);
+      setEditContact(data.contact);
+      setEditVerified(data.verified);
+      setIsViewOpen(true);
+    } catch (error) {
+      toast({
+        title: "Unable to load seller",
+        description: "Failed to fetch seller details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const loadSellerForEdit = async (id: string) => {
+    try {
+      const { data } = await getSeller(id);
+      setSelectedSeller(data);
+      setEditUserId(data.user.id);
+      setEditName(data.name);
+      setEditLocation(data.location);
+      setEditContact(data.contact);
+      setEditVerified(data.verified);
+      setIsEditOpen(true);
+    } catch (error) {
+      toast({
+        title: "Unable to load seller",
+        description: "Failed to fetch seller details.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCreateSeller = async () => {
+    if (!createName.trim() || !createLocation.trim() || !createContact.trim() || !createUserId.trim()) {
+      toast({ title: "Validation error", description: "All fields are required.", variant: "destructive" });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const { data } = await createSeller({
+        user_id: createUserId.trim(),
+        name: createName.trim(),
+        location: createLocation.trim(),
+        contact: createContact.trim(),
+        verified: createVerified,
+      });
+      addSeller(data);
+      queryClient.invalidateQueries({ queryKey: ["sellers"] });
+      toast({ title: "Seller created" });
+      setIsCreateOpen(false);
+      setCreateUserId("");
+      setCreateName("");
+      setCreateLocation("");
+      setCreateContact("");
+      setCreateVerified(false);
+    } catch (error) {
+      toast({ title: "Create failed", description: "Unable to create seller.", variant: "destructive" });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleUpdateSeller = async () => {
+    if (!selectedSeller) return;
+    if (!editName.trim() || !editLocation.trim() || !editContact.trim() || !editUserId.trim()) {
+      toast({ title: "Validation error", description: "All fields are required.", variant: "destructive" });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updateSeller(selectedSeller.id, {
+        user_id: editUserId.trim(),
+        name: editName.trim(),
+        location: editLocation.trim(),
+        contact: editContact.trim(),
+        verified: editVerified,
+      });
+      const { data } = await getSeller(selectedSeller.id);
+      updateSellerInStore(data);
+      setSelectedSeller(data);
+      queryClient.invalidateQueries({ queryKey: ["sellers"] });
+      toast({ title: "Seller updated" });
+      setIsEditOpen(false);
+    } catch (error) {
+      toast({ title: "Update failed", description: "Unable to update seller.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSeller = async () => {
+    if (!sellerToDelete) return;
+    try {
+      await deleteSeller(sellerToDelete);
+      removeSeller(sellerToDelete);
+      queryClient.invalidateQueries({ queryKey: ["sellers"] });
+      toast({ title: "Seller deleted" });
+    } catch (error) {
+      toast({ title: "Delete failed", description: "Unable to delete seller.", variant: "destructive" });
+    } finally {
+      setSellerToDelete(null);
+      setIsDeleteOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, sort, order]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-3 items-start">
+        <h3 className="font-display font-semibold">Sellers</h3>
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Add Seller
+        </Button>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" placeholder="Search sellers..." />
         </div>
-      ))}
+        <Select value={sort} onValueChange={(v) => setSort(v as "name" | "created_at")}>
+          <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="name">Sort by name</SelectItem>
+            <SelectItem value="created_at">Sort by created</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={order} onValueChange={(v) => setOrder(v as "asc" | "desc")}>
+          <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="asc">Ascending</SelectItem>
+            <SelectItem value="desc">Descending</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Seller Name</TableHead>
+              <TableHead>Owner</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>Products</TableHead>
+              <TableHead>Verified</TableHead>
+              <TableHead>Created Date</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sellers.map((seller) => (
+              <TableRow key={seller.id}>
+                <TableCell className="font-medium">{seller.name}</TableCell>
+                <TableCell>{seller.user.name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{seller.location}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{seller.contact}</TableCell>
+                <TableCell>{seller.products}</TableCell>
+                <TableCell>
+                  {seller.verified ? (
+                    <Badge className="bg-success/10 text-success text-xs gap-1"><BadgeCheck className="h-3 w-3" /> Verified</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-xs text-muted-foreground">Unverified</Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{new Date(seller.created_at).toLocaleDateString()}</TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadSellerDetails(seller.id)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadSellerForEdit(seller.id)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => {
+                        setSellerToDelete(seller.id);
+                        setIsDeleteOpen(true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {sellersMeta && sellersMeta.total > sellersMeta.limit && (
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <Button disabled={page === 1} onClick={() => setPage((current) => current - 1)}>
+            Prev
+          </Button>
+          <span>Page {sellersMeta.page} of {Math.ceil(sellersMeta.total / sellersMeta.limit)}</span>
+          <Button disabled={page * sellersMeta.limit >= sellersMeta.total} onClick={() => setPage((current) => current + 1)}>
+            Next
+          </Button>
+        </div>
+      )}
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Seller</DialogTitle>
+            <DialogDescription>Create a new seller account.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>User ID</Label>
+              <Input value={createUserId} onChange={(e) => setCreateUserId(e.target.value)} placeholder="UUID" />
+            </div>
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Seller Name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Location</Label>
+              <Input value={createLocation} onChange={(e) => setCreateLocation(e.target.value)} placeholder="City, Country" />
+            </div>
+            <div className="space-y-1">
+              <Label>Contact</Label>
+              <Input value={createContact} onChange={(e) => setCreateContact(e.target.value)} placeholder="Phone Number" />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={createVerified}
+                onChange={(e) => setCreateVerified(e.target.checked)}
+                className="rounded border-border"
+              />
+              <Label className="mb-0">Verified</Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateSeller} disabled={isCreating}>{isCreating ? "Creating..." : "Create"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={(open) => !open && setSelectedSeller(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Seller</DialogTitle>
+            <DialogDescription>Update seller information.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>User ID</Label>
+              <Input value={editUserId} onChange={(e) => setEditUserId(e.target.value)} placeholder="UUID" />
+            </div>
+            <div className="space-y-1">
+              <Label>Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Seller Name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Location</Label>
+              <Input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="City, Country" />
+            </div>
+            <div className="space-y-1">
+              <Label>Contact</Label>
+              <Input value={editContact} onChange={(e) => setEditContact(e.target.value)} placeholder="Phone Number" />
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={editVerified}
+                onChange={(e) => setEditVerified(e.target.checked)}
+                className="rounded border-border"
+              />
+              <Label className="mb-0">Verified</Label>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsEditOpen(false); setSelectedSeller(null); }}>Cancel</Button>
+            <Button onClick={handleUpdateSeller} disabled={isSaving}>{isSaving ? "Saving..." : "Save Changes"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isViewOpen} onOpenChange={(open) => !open && setSelectedSeller(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Seller Details</DialogTitle>
+            <DialogDescription>{selectedSeller?.name}</DialogDescription>
+          </DialogHeader>
+          {selectedSeller ? (
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground text-xs">Seller ID</p>
+                <p className="font-medium">{selectedSeller.id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Owner</p>
+                <p className="font-medium">{selectedSeller.user.name}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Owner ID</p>
+                <p className="font-medium text-xs">{selectedSeller.user.id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Contact</p>
+                <p className="font-medium">{selectedSeller.contact}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-muted-foreground text-xs">Location</p>
+                <p className="font-medium">{selectedSeller.location}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Products</p>
+                <p className="font-medium">{selectedSeller.products}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Verified</p>
+                <p className="font-medium">{selectedSeller.verified ? "Yes" : "No"}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Created Date</p>
+                <p className="font-medium text-xs">{new Date(selectedSeller.created_at).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs">Updated Date</p>
+                <p className="font-medium text-xs">{new Date(selectedSeller.updated_at).toLocaleDateString()}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Loading seller...</p>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setIsViewOpen(false); setSelectedSeller(null); }}>Close</Button>
+            <Button onClick={() => { if (selectedSeller) { setIsViewOpen(false); setIsEditOpen(true); } }} disabled={!selectedSeller}>Edit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delete Seller</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Are you sure you want to delete this seller?</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteSeller}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  </div>
-);
+  );
+};
 
 const LogisticsSection = () => {
   const [search, setSearch] = useState("");

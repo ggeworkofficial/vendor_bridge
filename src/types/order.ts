@@ -50,3 +50,14 @@ export type OrdersQueryParams = {
 export type OrderUpdatePayload = {
   status: OrderStatus;
 };
+
+export interface CreateOrderProduct {
+  product_id: string;
+  quantity: number;
+}
+
+export interface CreateOrderRequest {
+  products: CreateOrderProduct[];
+  payment_method: "cod" | "advance" | "full";
+  address: string;
+}

@@ -9,17 +9,26 @@ import Layout from "@/components/Layout";
 import { useCart } from "@/lib/cart-context";
 import { mockPaymentAccounts } from "@/lib/contact-data";
 import { Badge } from "@/components/ui/badge";
+import { createOrder } from "@/api/order.api";
+import { useOrderStore } from "@/features/order/order.store";
 
 type PaymentMethod = "cod" | "advance" | "full";
 
 const Checkout = () => {
   const { items, total, clearCart } = useCart();
+  const addOrder = useOrderStore((state) => state.addOrder);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [addressLine, setAddressLine] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [zip, setZip] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,18 +46,35 @@ const Checkout = () => {
     toast({ title: "Copied!", description: "Account number copied to clipboard." });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((paymentMethod === "advance" || paymentMethod === "full") && !receiptFile) {
       toast({ title: "Receipt Required", description: "Please upload your payment receipt.", variant: "destructive" });
       return;
     }
+
+    if (!addressLine.trim() || !city.trim() || !region.trim()) {
+      toast({ title: "Address Required", description: "Please provide a complete delivery address.", variant: "destructive" });
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => {
+
+    const address = [addressLine.trim(), city.trim(), region.trim(), zip.trim()].filter(Boolean).join(", ");
+    const products = items.map((item) => ({ product_id: item.product.id, quantity: item.quantity }));
+
+    try {
+      const { data } = await createOrder({ products, payment_method: paymentMethod, address });
+      addOrder(data);
       clearCart();
       toast({ title: "Order Placed! 🎉", description: "Your order has been confirmed. Track it in Orders." });
       navigate("/orders");
-    }, 1500);
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || "Unable to place order.";
+      toast({ title: "Order failed", description: message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (items.length === 0) {
@@ -77,14 +103,14 @@ const Checkout = () => {
           <div className="bg-card border rounded-lg p-6 space-y-4">
             <h3 className="font-display font-semibold">Delivery Address</h3>
             <div className="grid sm:grid-cols-2 gap-4">
-              <div><Label>Full Name</Label><Input required placeholder="Full Name" /></div>
-              <div><Label>Phone</Label><Input required type="tel" placeholder="+251 911 000 000" /></div>
+              <div><Label>Full Name</Label><Input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full Name" /></div>
+              <div><Label>Phone</Label><Input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+251 911 000 000" /></div>
             </div>
-            <div><Label>Address</Label><Input required placeholder="123 Bole Road" /></div>
+            <div><Label>Address</Label><Input required value={addressLine} onChange={(e) => setAddressLine(e.target.value)} placeholder="123 Bole Road" /></div>
             <div className="grid sm:grid-cols-3 gap-4">
-              <div><Label>City</Label><Input required placeholder="Addis Ababa" /></div>
-              <div><Label>State/Region</Label><Input required placeholder="Addis Ababa" /></div>
-              <div><Label>Zip</Label><Input placeholder="1000" /></div>
+              <div><Label>City</Label><Input required value={city} onChange={(e) => setCity(e.target.value)} placeholder="Addis Ababa" /></div>
+              <div><Label>State/Region</Label><Input required value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Addis Ababa" /></div>
+              <div><Label>Zip</Label><Input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="1000" /></div>
             </div>
           </div>
 

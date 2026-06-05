@@ -6,6 +6,7 @@ type OrderState = {
   selectedOrder: Order | null;
   setOrders: (orders: Order[]) => void;
   setSelectedOrder: (order: Order | null) => void;
+  addOrder: (order: Order) => void;
   getOrder: (id: string) => Order | null;
   updateOrder: (order: Partial<Order> & { id: string }) => void;
   clearOrders: () => void;
@@ -16,6 +17,7 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   selectedOrder: null,
   setOrders: (orders) => set({ orders }),
   setSelectedOrder: (order) => set({ selectedOrder: order }),
+  addOrder: (order) => set((state) => ({ orders: [order, ...state.orders] })),
   getOrder: (id) => get().orders.find((o) => o.id === id) || null,
   updateOrder: (order) =>
     set((state) => ({

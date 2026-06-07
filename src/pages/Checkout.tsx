@@ -9,7 +9,9 @@ import Layout from "@/components/Layout";
 import { useCart } from "@/lib/cart-context";
 import { mockPaymentAccounts } from "@/lib/contact-data";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { createOrder } from "@/api/order.api";
+import { createReceipt } from "@/api/receipt.api";
 import { useOrderStore } from "@/features/order/order.store";
 
 type PaymentMethod = "cod" | "advance" | "full";
@@ -23,6 +25,8 @@ const Checkout = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptAccount, setReceiptAccount] = useState("");
+  const [receiptNote, setReceiptNote] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [addressLine, setAddressLine] = useState("");
@@ -64,11 +68,37 @@ const Checkout = () => {
     const products = items.map((item) => ({ product_id: item.product.id, quantity: item.quantity }));
 
     try {
-      const { data } = await createOrder({ products, payment_method: paymentMethod, address });
-      addOrder(data);
-      clearCart();
-      toast({ title: "Order Placed! 🎉", description: "Your order has been confirmed. Track it in Orders." });
-      navigate("/orders");
+      // Step 1: Create the order
+      const { data: orderData } = await createOrder({ products, payment_method: paymentMethod, address });
+      addOrder(orderData);
+
+      // Step 2: Create receipt if payment method is not COD
+      if (paymentMethod !== "cod" && receiptFile) {
+        try {
+          const formData = new FormData();
+          formData.append("order_id", orderData.id);
+          formData.append("account", receiptAccount);
+          formData.append("note", receiptNote);
+          formData.append("images", receiptFile);
+          
+          await createReceipt(formData);
+          
+          // Success: clear cart and redirect
+          clearCart();
+          toast({ title: "Order Placed! 🎉", description: "Your order and receipt have been submitted for review." });
+          navigate("/orders");
+        } catch (receiptError: any) {
+          // Receipt creation failed: show error, don't clear cart, don't redirect
+          const receiptMessage = receiptError?.response?.data?.message || receiptError?.message || "Unable to upload receipt.";
+          toast({ title: "Receipt Upload Failed", description: `Order created but receipt upload failed: ${receiptMessage}. Please try again or contact support.`, variant: "destructive" });
+          // Don't clear cart or redirect so user can try again
+        }
+      } else {
+        // COD payment: clear cart and redirect immediately
+        clearCart();
+        toast({ title: "Order Placed! 🎉", description: "Your order has been confirmed. Track it in Orders." });
+        navigate("/orders");
+      }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || "Unable to place order.";
       toast({ title: "Order failed", description: message, variant: "destructive" });
@@ -235,36 +265,59 @@ const Checkout = () => {
                 </div>
 
                 {/* Receipt Upload */}
-                <div className="space-y-2">
-                  <Label className="font-semibold">Upload Payment Receipt *</Label>
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-                      receiptPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,.pdf"
-                      onChange={handleFileChange}
-                      className="hidden"
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="font-semibold">Upload Payment Receipt *</Label>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                        receiptPreview ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                      }`}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      {receiptPreview ? (
+                        <div className="space-y-2">
+                          <CheckCircle2 className="h-8 w-8 text-primary mx-auto" />
+                          <p className="text-sm font-medium text-primary">{receiptFile?.name}</p>
+                          {receiptPreview.startsWith("data:image") && (
+                            <img src={receiptPreview} alt="Receipt" className="max-h-32 mx-auto rounded-md" />
+                          )}
+                          <p className="text-xs text-muted-foreground">Click to change</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
+                          <p className="text-sm text-muted-foreground">Click to upload receipt (image or PDF)</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Optional Account Field */}
+                  <div className="space-y-1">
+                    <Label>Account Used (Optional)</Label>
+                    <Input 
+                      value={receiptAccount} 
+                      onChange={(e) => setReceiptAccount(e.target.value)} 
+                      placeholder="e.g., CBE Birr - 1000123456789"
                     />
-                    {receiptPreview ? (
-                      <div className="space-y-2">
-                        <CheckCircle2 className="h-8 w-8 text-primary mx-auto" />
-                        <p className="text-sm font-medium text-primary">{receiptFile?.name}</p>
-                        {receiptPreview.startsWith("data:image") && (
-                          <img src={receiptPreview} alt="Receipt" className="max-h-32 mx-auto rounded-md" />
-                        )}
-                        <p className="text-xs text-muted-foreground">Click to change</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Upload className="h-8 w-8 text-muted-foreground mx-auto" />
-                        <p className="text-sm text-muted-foreground">Click to upload receipt (image or PDF)</p>
-                      </div>
-                    )}
+                  </div>
+                  
+                  {/* Optional Note Field */}
+                  <div className="space-y-1">
+                    <Label>Note (Optional)</Label>
+                    <Textarea 
+                      value={receiptNote} 
+                      onChange={(e) => setReceiptNote(e.target.value)} 
+                      placeholder="Add any additional information about your payment..."
+                      rows={2}
+                    />
                   </div>
                 </div>
               </div>

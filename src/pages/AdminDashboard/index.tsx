@@ -30,7 +30,8 @@ const sections = [
   { key: "logistics", label: "Logistics", icon: Truck },
   { key: "users", label: "Users", icon: Users },
   { key: "sellers", label: "Sellers", icon: Store },
-  { key: "complaints", label: "Complaints", icon: AlertTriangle },
+// Temporarily disabled - Complaints page not implemented yet.
+  // { key: "complaints", label: "Complaints", icon: AlertTriangle },
   { key: "contact", label: "Contact & Social", icon: Globe },
   { key: "reports", label: "Reports", icon: TrendingUp },
 ];

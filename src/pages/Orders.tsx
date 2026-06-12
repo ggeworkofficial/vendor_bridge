@@ -134,6 +134,7 @@ const Orders = () => {
   };
 
   const handleViewComplaints = (orderId: string) => {
+    setComplaints([]);
     setSelectedOrderIdForComplaints(orderId);
     setSelectedComplaint(null);
     setIsViewComplaintsOpen(true);

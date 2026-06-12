@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOrders, getOrder, updateOrder } from "@/api/order.api";
 import { getComplaints, updateComplaint } from "@/api/complaint.api";
-import { getComplaintMessages, createComplaintMessage } from "@/api/complaint-message.api";
+import { getComplaintMessages, createComplaintMessage, getComplaintMessage } from "@/api/complaint-message.api";
 import { useOrderStore } from "@/features/order/order.store";
 import { useComplaintStore } from "@/features/complaint/complaint.store";
 import { useComplaintMessageStore } from "@/features/complaint-message/complaint-message.store";
@@ -170,12 +170,14 @@ const OrdersSection = () => {
   };
 
   const handleViewComplaints = (orderId: string) => {
+    setComplaints([]);
     setSelectedOrderIdForComplaints(orderId);
     setSelectedComplaint(null);
     setIsComplaintsOpen(true);
   };
 
   const handleSelectComplaint = (complaint: any) => {
+    
     setSelectedComplaint(complaint);
     setComplaintEditStatus(complaint.status);
     setComplaintEditPriority(complaint.priority);
@@ -204,10 +206,11 @@ const OrdersSection = () => {
     if (!selectedComplaint) return;
     setIsUpdatingComplaint(true);
     try {
-      const { data } = await updateComplaint(selectedComplaint.id, {
+       await updateComplaint(selectedComplaint.id, {
         status: complaintEditStatus,
         priority: complaintEditPriority,
       });
+      const { data } = await getComplaintMessage(selectedComplaint.id);
       updateComplaintInStore(data);
       setSelectedComplaint(data);
       queryClient.invalidateQueries({ queryKey: ["complaints"] });

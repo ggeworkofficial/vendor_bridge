@@ -24,8 +24,9 @@ const Login = () => {
       const password = formData.get("password") as string;
 
       if (isRegister) {
-        const name = formData.get("name") as string;
-        await register({ name, email, password });
+        const name = formData.get("full_name") as string;
+        alert(name);
+        await register({ full_name: name, email, password });
         toast({
           title: "Registration successful",
           description: "You can now log in with your credentials",

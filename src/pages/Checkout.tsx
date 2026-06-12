@@ -76,7 +76,7 @@ const Checkout = () => {
       if (paymentMethod !== "cod" && receiptFile) {
         try {
           const formData = new FormData();
-          formData.append("order_id", orderData.id);
+          formData.append("order_id", orderData.data.order.id);
           formData.append("account", receiptAccount);
           formData.append("note", receiptNote);
           formData.append("images", receiptFile);

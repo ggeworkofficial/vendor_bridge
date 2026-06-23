@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ShoppingCart, BadgeCheck, Star, MapPin, Clock, Loader2, MessageSquare, Send } from "lucide-react";
+import { ArrowLeft, ShoppingCart, BadgeCheck, Star, MapPin, Clock, Loader2, MessageSquare, Send, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import Layout from "@/components/Layout";
 import QualityBadge from "@/components/QualityBadge";
+import { TrustBadge } from "@/components/TrustBadge";
 import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -140,12 +141,8 @@ const ProductDetail = () => {
           className="space-y-6"
         >
           <div className="flex flex-wrap gap-2">
+            <TrustBadge postedBy={product.posted_by} sellerName={product.seller.name} />
             <QualityBadge quality={product.quality_label} />
-            {product.verified && (
-              <Badge className="gap-1 bg-primary text-primary-foreground">
-                <BadgeCheck className="h-3 w-3" /> Verified Product
-              </Badge>
-            )}
           </div>
 
           <h1 className="text-3xl md:text-4xl font-display font-bold">{product.name}</h1>
@@ -161,6 +158,14 @@ const ProductDetail = () => {
             <div className="flex items-center gap-1">
               <MapPin className="h-4 w-4" /> {product.location}
             </div>
+            {product.posted_by === "vendor" && (
+              <div className="flex items-center gap-1">
+                <Store className="h-4 w-4" />
+                <Link to={`/seller/${product.seller.id}`} className="hover:text-primary transition-colors">
+                  {product.seller.name}
+                </Link>
+              </div>
+            )}
           </div>
 
           <p className="text-muted-foreground leading-relaxed">{product.description}</p>

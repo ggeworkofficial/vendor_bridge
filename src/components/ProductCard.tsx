@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, BadgeCheck, Star, MapPin } from "lucide-react";
+import { ShoppingCart, BadgeCheck, Star, MapPin, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InventoryProduct } from "@/types/inventory";
 import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
+import { TrustBadge } from "./TrustBadge";
 
 const qualityColors: Record<string, string> = {
   high: "bg-success text-success-foreground",
@@ -35,14 +36,10 @@ const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-2 left-2 flex gap-1.5">
+            <TrustBadge postedBy={product.posted_by} sellerName={product.seller.name} className="text-xs" />
             <Badge className={qualityColors[product.quality_label] + " text-xs"}>
               {product.quality_label}
             </Badge>
-            {product.verified && (
-              <Badge variant="secondary" className="gap-1 text-xs bg-primary text-primary-foreground">
-                <BadgeCheck className="h-3 w-3" /> Verified
-              </Badge>
-            )}
           </div>
         </div>
       </Link>
@@ -64,6 +61,12 @@ const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?
           <MapPin className="h-3 w-3" />
           <span>{product.location}</span>
         </div>
+        {product.posted_by === "vendor" && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Store className="h-3 w-3" />
+            <span className="truncate">{product.seller.name}</span>
+          </div>
+        )}
         <div className="flex items-center justify-between pt-2">
           <span className="text-lg font-display font-bold">${Number(product.price).toFixed(2)}</span>
           <Button

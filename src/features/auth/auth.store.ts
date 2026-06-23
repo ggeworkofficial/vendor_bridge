@@ -5,7 +5,7 @@ export type User = {
   id: string;
   full_name: string;
   email: string;
-  role: "buyer" | "contributor" | "admin";
+  role: "buyer" | "contributor" | "admin" | "reseller" | "service_provider" | "bulk_buyer" | "seller";
 };
 
 type AuthState = {

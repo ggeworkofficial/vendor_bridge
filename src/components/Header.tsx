@@ -70,6 +70,13 @@ const Header = () => {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/contact">Contact</Link>
           </Button>
+          {user?.role === "seller" && (
+            <>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/seller/dashboard">Seller Dashboard</Link>
+              </Button>
+            </>
+          )}
           {user?.role === "admin" && (
             <Button variant="ghost" size="sm" asChild>
               <Link to="/admin">Admin</Link>
@@ -129,7 +136,12 @@ const Header = () => {
           <Link to="/" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Products</Link>
           <Link to="/orders" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Orders</Link>
           <Link to="/contact" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Contact</Link>
-          <Link to="/admin" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Admin</Link>
+          {user?.role === "seller" && (
+            <Link to="/seller/dashboard" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Seller Dashboard</Link>
+          )}
+          {user?.role === "admin" && (
+            <Link to="/admin" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Admin</Link>
+          )}
         </div>
       )}
     </header>

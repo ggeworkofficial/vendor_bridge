@@ -1,6 +1,8 @@
 export type InventoryQualityLabel = "high" | "medium" | "low";
 export type InventorySortField = "name" | "quantity" | "price" | "verified" | "created_at";
 export type InventoryOrder = "asc" | "desc";
+export type PostedBy = "vendorbridge" | "vendor";
+export type ProductApprovalStatus = "draft" | "pending_review" | "approved" | "rejected";
 
 export interface InventoryImage {
   image_url: string;
@@ -31,6 +33,9 @@ export interface InventoryProduct {
   location: string;
   rating: number;
   reviewCount: number;
+  posted_by: PostedBy;
+  approval_status: ProductApprovalStatus;
+  listing_type?: "retail" | "bulk" | "both";
   created_at: string;
   updated_at: string;
 }
@@ -54,11 +59,14 @@ export type InventoryQueryParam = {
   search?: string;
   sort?: InventorySortField;
   order?: InventoryOrder;
+  posted_by?: PostedBy;
+  approval_status?: ProductApprovalStatus;
+  listing_type?: "retail" | "bulk" | "both";
 };
 
 export type InventoryUpdatePayload = Partial<
   Pick<
     InventoryProduct,
-    "name" | "description" | "price" | "quantity" | "quality_label" | "verified" | "location"
+    "name" | "description" | "price" | "quantity" | "quality_label" | "verified" | "location" | "approval_status"
   >
 >;

@@ -14,6 +14,10 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
 import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
+import SellerApplication from "./pages/SellerApplication";
+import SellerDashboard from "./pages/SellerDashboard";
+import SellerProductForm from "./pages/SellerProductForm";
+import SellerProfile from "./pages/SellerProfile";
 import { useAuth } from "@/features/auth/auth.store";
 import {getCurrentUser} from "@/api/auth.api";
 import { useEffect } from "react";
@@ -52,6 +56,10 @@ const App = () => {
               <Route path="/profile" element={<Profile />} />   
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/contact" element={<Contact />} />
+              <Route path="/seller/application" element={<SellerApplication />} />
+              <Route path="/seller/dashboard" element={<SellerDashboard />} />
+              <Route path="/seller/products/new" element={<SellerProductForm />} />
+              <Route path="/seller/:id" element={<SellerProfile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

@@ -13,6 +13,8 @@ import DashboardSection from "./DashboardSection";
 import InventorySection from "./InventorySection";
 import CategorySection from "./CategorySection";
 import SellerSection from "./SellerSection";
+import ProductApprovalSection from "./ProductApprovalSection";
+import SellerApprovalSection from "./SellerApprovalSection";
 import LogisticsSection from "./LogisticsSection";
 import OrdersSection from "./OrdersSection";
 import ReceiptsSection from "./ReceiptsSection";
@@ -30,6 +32,8 @@ const sections = [
   { key: "logistics", label: "Logistics", icon: Truck },
   { key: "users", label: "Users", icon: Users },
   { key: "sellers", label: "Sellers", icon: Store },
+  { key: "seller-approvals", label: "Seller Approvals", icon: Users },
+  { key: "product-approvals", label: "Product Approvals", icon: Package },
 // Temporarily disabled - Complaints page not implemented yet.
   // { key: "complaints", label: "Complaints", icon: AlertTriangle },
   { key: "contact", label: "Contact & Social", icon: Globe },
@@ -55,6 +59,8 @@ const AdminDashboard = () => {
     logistics: <LogisticsSection />,
     users: <UsersSection />,
     sellers: <SellerSection />,
+    "seller-approvals": <SellerApprovalSection />,
+    "product-approvals": <ProductApprovalSection />,
     // complaints: <ComplaintsSection />,
     contact: <ContactAdminSection />,
     reports: <ReportsSection />,

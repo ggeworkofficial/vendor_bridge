@@ -46,7 +46,7 @@ const Profile = () => {
   if (!user) return <div>Please login first</div>;
 
   return (
-    <div className="container max-w-md py-10 space-y-4">
+    <div className="container max-w-md py-10 space-y-6">
       <h1 className="text-2xl font-bold">Profile</h1>
 
       <div className="space-y-2">
@@ -62,6 +62,27 @@ const Profile = () => {
       <Button onClick={handleUpdate} className="w-full">
         Save Changes
       </Button>
+
+      <div className="bg-card border rounded-xl p-6 space-y-4">
+        <h2 className="text-lg font-semibold">Get started with your next role</h2>
+        <div className="grid gap-3">
+          {user?.role !== "seller" && (
+            <Button variant="outline" asChild>
+              <a href="/seller/application">Apply to Sell</a>
+            </Button>
+          )}
+          {user?.role !== "reseller" && (
+            <Button variant="outline" asChild>
+              <a href="/reseller/apply">Become a Reseller</a>
+            </Button>
+          )}
+          {user?.role !== "service_provider" && (
+            <Button variant="outline" asChild>
+              <a href="/skills/register">Register as Service Provider</a>
+            </Button>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -91,6 +91,9 @@ export const getServiceProject = (id: string) =>
 export const updateServiceProject = (id: string, body: { status?: string; milestones?: any[] }) =>
   api.put<ServiceProject>(`/service-projects/${id}`, body);
 
+export const createServiceProject = (data: Partial<ServiceProject>) =>
+  api.post<ServiceProject>("/service-projects", data);
+
 export const getMyServiceProjects = (params?: { page?: number; limit?: number }) =>
   api.get<{ data: ServiceProject[]; meta: { page: number; limit: number; total: number } }>("/service-projects/my", { params });
 

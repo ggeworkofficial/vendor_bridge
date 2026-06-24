@@ -65,6 +65,12 @@ const Header = () => {
             <Link to="/">Products</Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
+            <Link to="/skills/marketplace">Skills</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/bulk/orders">Bulk Orders</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
             <Link to="/orders">Orders</Link>
           </Button>
           <Button variant="ghost" size="sm" asChild>
@@ -74,6 +80,20 @@ const Header = () => {
             <>
               <Button variant="ghost" size="sm" asChild>
                 <Link to="/seller/dashboard">Seller Dashboard</Link>
+              </Button>
+            </>
+          )}
+          {user?.role === "reseller" && (
+            <>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/reseller/dashboard">Reseller Dashboard</Link>
+              </Button>
+            </>
+          )}
+          {user?.role === "service_provider" && (
+            <>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/skills/projects">My Projects</Link>
               </Button>
             </>
           )}
@@ -134,10 +154,18 @@ const Header = () => {
             />
           </form>
           <Link to="/" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Products</Link>
+          <Link to="/skills/marketplace" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Skills</Link>
+          <Link to="/bulk/orders" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Bulk Orders</Link>
           <Link to="/orders" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Orders</Link>
           <Link to="/contact" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Contact</Link>
           {user?.role === "seller" && (
             <Link to="/seller/dashboard" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Seller Dashboard</Link>
+          )}
+          {user?.role === "reseller" && (
+            <Link to="/reseller/dashboard" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Reseller Dashboard</Link>
+          )}
+          {user?.role === "service_provider" && (
+            <Link to="/skills/projects" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>My Projects</Link>
           )}
           {user?.role === "admin" && (
             <Link to="/admin" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Admin</Link>

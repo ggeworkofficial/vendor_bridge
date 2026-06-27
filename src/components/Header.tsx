@@ -9,6 +9,14 @@ import { useState } from "react";
 import { useAuth } from "@/features/auth/auth.store";
 import { api } from "@/api/client";
 import { logout as logoutFun } from "@/api/auth.api";
+import { ModeToggle } from "@/components/mode-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { FileText } from "lucide-react";
 
 const Header = () => {
   const { itemCount } = useCart();
@@ -20,19 +28,21 @@ const Header = () => {
 
   const handleLogout = async () => {
     try {
-
       await logoutFun();
       logout();
       navigate("/login");
     } catch (err) {
       console.error("Logout failed:", err);
     }
-    
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (search.trim()) navigate(`/?search=${encodeURIComponent(search.trim())}`);
+    if (search.trim()) {
+      navigate(`/?search=${encodeURIComponent(search.trim())}`);
+    } else {
+      navigate("/");
+    }
   };
 
   return (
@@ -40,14 +50,23 @@ const Header = () => {
       <div className="container flex h-16 items-center justify-between gap-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <img src={logo} alt="VendorBridge" className="h-9 w-9" width={36} height={36} />
+          <img
+            src={logo}
+            alt="VendorBridge"
+            className="h-9 w-9"
+            width={36}
+            height={36}
+          />
           <span className="font-display text-xl font-bold hidden sm:inline">
             Vendor<span className="text-primary">Bridge</span>
           </span>
         </Link>
 
         {/* Search */}
-        <form onSubmit={handleSearch} className="hidden md:flex flex-1 max-w-md">
+        <form
+          onSubmit={handleSearch}
+          className="hidden md:flex flex-1 max-w-md"
+        >
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -76,20 +95,32 @@ const Header = () => {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/contact">Contact</Link>
           </Button>
-          {user && user.role !== "seller" && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/seller/application">Apply Seller</Link>
-            </Button>
-          )}
-          {user && user.role !== "reseller" && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/reseller/apply">Apply Reseller</Link>
-            </Button>
-          )}
-          {user && user.role !== "service_provider" && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/skills/register">Become Provider</Link>
-            </Button>
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Applications
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {user.role !== "seller" && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/seller/application">Apply Seller</Link>
+                  </DropdownMenuItem>
+                )}
+                {user.role !== "reseller" && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/reseller/apply">Apply Reseller</Link>
+                  </DropdownMenuItem>
+                )}
+                {user.role !== "service_provider" && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/skills/register">Become Provider</Link>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
           {user?.role === "seller" && (
             <>
@@ -126,6 +157,7 @@ const Header = () => {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          <ModeToggle />
           <Button variant="ghost" size="icon" asChild>
             <Link to={user ? "/profile" : "/login"}>
               <User className="h-5 w-5" />
@@ -147,9 +179,13 @@ const Header = () => {
             className="md:hidden"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </Button>
-                    {user ? (
+          {user ? (
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               Logout
             </Button>
@@ -173,31 +209,103 @@ const Header = () => {
               onChange={(e) => setSearch(e.target.value)}
             />
           </form>
-          <Link to="/" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Products</Link>
-          <Link to="/skills/marketplace" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Skills</Link>
-          <Link to="/bulk/orders" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Bulk Orders</Link>
-          <Link to="/orders" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Orders</Link>
-          <Link to="/contact" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Contact</Link>
+          <Link
+            to="/"
+            className="block py-2 font-medium"
+            onClick={() => setMobileOpen(false)}
+          >
+            Products
+          </Link>
+          <Link
+            to="/skills/marketplace"
+            className="block py-2 font-medium"
+            onClick={() => setMobileOpen(false)}
+          >
+            Skills
+          </Link>
+          <Link
+            to="/bulk/orders"
+            className="block py-2 font-medium"
+            onClick={() => setMobileOpen(false)}
+          >
+            Bulk Orders
+          </Link>
+          <Link
+            to="/orders"
+            className="block py-2 font-medium"
+            onClick={() => setMobileOpen(false)}
+          >
+            Orders
+          </Link>
+          <Link
+            to="/contact"
+            className="block py-2 font-medium"
+            onClick={() => setMobileOpen(false)}
+          >
+            Contact
+          </Link>
           {user && user.role !== "seller" && (
-            <Link to="/seller/application" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Apply Seller</Link>
+            <Link
+              to="/seller/application"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Apply Seller
+            </Link>
           )}
           {user && user.role !== "reseller" && (
-            <Link to="/reseller/apply" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Apply Reseller</Link>
+            <Link
+              to="/reseller/apply"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Apply Reseller
+            </Link>
           )}
           {user && user.role !== "service_provider" && (
-            <Link to="/skills/register" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Become Provider</Link>
+            <Link
+              to="/skills/register"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Become Provider
+            </Link>
           )}
           {user?.role === "seller" && (
-            <Link to="/seller/dashboard" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Seller Dashboard</Link>
+            <Link
+              to="/seller/dashboard"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Seller Dashboard
+            </Link>
           )}
           {user?.role === "reseller" && (
-            <Link to="/reseller/dashboard" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Reseller Dashboard</Link>
+            <Link
+              to="/reseller/dashboard"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Reseller Dashboard
+            </Link>
           )}
           {user?.role === "service_provider" && (
-            <Link to="/skills/projects" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>My Projects</Link>
+            <Link
+              to="/skills/projects"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              My Projects
+            </Link>
           )}
           {user?.role === "admin" && (
-            <Link to="/admin" className="block py-2 font-medium" onClick={() => setMobileOpen(false)}>Admin</Link>
+            <Link
+              to="/admin"
+              className="block py-2 font-medium"
+              onClick={() => setMobileOpen(false)}
+            >
+              Admin
+            </Link>
           )}
         </div>
       )}

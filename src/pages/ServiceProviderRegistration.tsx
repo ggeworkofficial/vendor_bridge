@@ -5,13 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createServiceProvider, getMyServiceProvider } from "@/api/service.api";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/features/auth/auth.store";
+import { ArrowLeft } from "lucide-react";
 
 const ServiceProviderRegistration = () => {
   const navigate = useNavigate();
@@ -36,11 +43,18 @@ const ServiceProviderRegistration = () => {
   const mutation = useMutation({
     mutationFn: (data: any) => createServiceProvider(data),
     onSuccess: () => {
-      toast({ title: "Profile Created", description: "Your service provider profile has been created." });
+      toast({
+        title: "Profile Created",
+        description: "Your service provider profile has been created.",
+      });
       navigate("/skills/marketplace");
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to create profile. Please try again.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Failed to create profile. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -70,7 +84,11 @@ const ServiceProviderRegistration = () => {
     e.preventDefault();
 
     if (!user) {
-      toast({ title: "Authentication Required", description: "Please login to register.", variant: "destructive" });
+      toast({
+        title: "Authentication Required",
+        description: "Please login to register.",
+        variant: "destructive",
+      });
       navigate("/login");
       return;
     }
@@ -91,7 +109,9 @@ const ServiceProviderRegistration = () => {
   if (!user) {
     return (
       <Layout>
-        <div className="container py-20 text-center text-muted-foreground">Please login to register as a service provider.</div>
+        <div className="container py-20 text-center text-muted-foreground">
+          Please login to register as a service provider.
+        </div>
       </Layout>
     );
   }
@@ -102,7 +122,18 @@ const ServiceProviderRegistration = () => {
       <Layout>
         <div className="container py-8 max-w-3xl">
           <div className="mb-8">
-            <h1 className="text-3xl font-display font-bold mb-2">Service Provider Profile</h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Profile
+            </Button>
+            <h1 className="text-3xl font-display font-bold mb-2">
+              Service Provider Profile
+            </h1>
             <p className="text-muted-foreground">Your profile status</p>
           </div>
 
@@ -110,7 +141,10 @@ const ServiceProviderRegistration = () => {
             <CardContent className="p-8">
               <div className="text-center">
                 <CheckCircle2 className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-semibold mb-2">Profile {provider.verified ? "Verified" : "Pending Verification"}</h2>
+                <h2 className="text-2xl font-semibold mb-2">
+                  Profile{" "}
+                  {provider.verified ? "Verified" : "Pending Verification"}
+                </h2>
                 <p className="text-muted-foreground mb-6">
                   {provider.verified
                     ? "Your service provider profile is verified. You can now offer services on the marketplace."
@@ -119,10 +153,25 @@ const ServiceProviderRegistration = () => {
                 <div className="bg-muted/50 p-4 rounded-lg text-left">
                   <h3 className="font-medium mb-2">Profile Details</h3>
                   <div className="space-y-2 text-sm">
-                    <p><span className="font-medium">Name:</span> {provider.full_name}</p>
-                    <p><span className="font-medium">Hourly Rate:</span> {provider.hourly_rate ? `$${provider.hourly_rate}/hr` : "Not set"}</p>
-                    <p><span className="font-medium">Rating:</span> {provider.rating.toFixed(1)} ({provider.review_count} reviews)</p>
-                    <p><span className="font-medium">Completed Projects:</span> {provider.total_completed_projects}</p>
+                    <p>
+                      <span className="font-medium">Name:</span>{" "}
+                      {provider.full_name}
+                    </p>
+                    <p>
+                      <span className="font-medium">Hourly Rate:</span>{" "}
+                      {provider.hourly_rate
+                        ? `$${provider.hourly_rate}/hr`
+                        : "Not set"}
+                    </p>
+                    <p>
+                      <span className="font-medium">Rating:</span>{" "}
+                      {provider.rating.toFixed(1)} ({provider.review_count}{" "}
+                      reviews)
+                    </p>
+                    <p>
+                      <span className="font-medium">Completed Projects:</span>{" "}
+                      {provider.total_completed_projects}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -137,8 +186,21 @@ const ServiceProviderRegistration = () => {
     <Layout>
       <div className="container py-8 max-w-3xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-display font-bold mb-2">Become a Service Provider</h1>
-          <p className="text-muted-foreground">Offer your skills and services on VendorBridge</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Profile
+          </Button>
+          <h1 className="text-3xl font-display font-bold mb-2">
+            Become a Service Provider
+          </h1>
+          <p className="text-muted-foreground">
+            Offer your skills and services on VendorBridge
+          </p>
         </div>
 
         <Card>
@@ -172,13 +234,17 @@ const ServiceProviderRegistration = () => {
 
               <div>
                 <Label>Skills *</Label>
-                <p className="text-sm text-muted-foreground mb-2">Add your skills (press Enter or click Add)</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Add your skills (press Enter or click Add)
+                </p>
                 <div className="flex gap-2 mb-2">
                   <Input
                     value={skillInput}
                     onChange={(e) => setSkillInput(e.target.value)}
                     placeholder="e.g., Graphic Design"
-                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" && (e.preventDefault(), addSkill())
+                    }
                   />
                   <Button type="button" variant="outline" onClick={addSkill}>
                     Add
@@ -205,15 +271,24 @@ const ServiceProviderRegistration = () => {
 
               <div>
                 <Label>Certifications (Optional)</Label>
-                <p className="text-sm text-muted-foreground mb-2">Add your professional certifications</p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  Add your professional certifications
+                </p>
                 <div className="flex gap-2 mb-2">
                   <Input
                     value={certInput}
                     onChange={(e) => setCertInput(e.target.value)}
                     placeholder="e.g., AWS Certified"
-                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addCertification())}
+                    onKeyPress={(e) =>
+                      e.key === "Enter" &&
+                      (e.preventDefault(), addCertification())
+                    }
                   />
-                  <Button type="button" variant="outline" onClick={addCertification}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={addCertification}
+                  >
                     Add
                   </Button>
                 </div>
@@ -250,7 +325,9 @@ const ServiceProviderRegistration = () => {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="responseTime">Response Time (hours) (Optional)</Label>
+                  <Label htmlFor="responseTime">
+                    Response Time (hours) (Optional)
+                  </Label>
                   <Input
                     id="responseTime"
                     type="number"
@@ -277,12 +354,23 @@ const ServiceProviderRegistration = () => {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate(-1)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={mutation.isPending} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={mutation.isPending}
+                  className="flex-1"
+                >
                   {mutation.isPending ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating Profile...</>
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating
+                      Profile...
+                    </>
                   ) : (
                     "Create Profile"
                   )}

@@ -7,10 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createResellerApplication, getMyResellerApplication } from "@/api/reseller.api";
+import {
+  createResellerApplication,
+  getMyResellerApplication,
+} from "@/api/reseller.api";
 import { useToast } from "@/hooks/use-toast";
 import Layout from "@/components/Layout";
 import { useAuth } from "@/features/auth/auth.store";
+import { ArrowLeft } from "lucide-react";
 
 const ResellerApplication = () => {
   const navigate = useNavigate();
@@ -36,11 +40,18 @@ const ResellerApplication = () => {
   const mutation = useMutation({
     mutationFn: (data: any) => createResellerApplication(data),
     onSuccess: () => {
-      toast({ title: "Application Submitted", description: "Your reseller application has been submitted for review." });
+      toast({
+        title: "Application Submitted",
+        description: "Your reseller application has been submitted for review.",
+      });
       navigate("/profile");
     },
     onError: () => {
-      toast({ title: "Error", description: "Failed to submit application. Please try again.", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: "Failed to submit application. Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
@@ -56,7 +67,11 @@ const ResellerApplication = () => {
     e.preventDefault();
 
     if (!user) {
-      toast({ title: "Authentication Required", description: "Please login to apply.", variant: "destructive" });
+      toast({
+        title: "Authentication Required",
+        description: "Please login to apply.",
+        variant: "destructive",
+      });
       navigate("/login");
       return;
     }
@@ -94,7 +109,9 @@ const ResellerApplication = () => {
   if (!user) {
     return (
       <Layout>
-        <div className="container py-20 text-center text-muted-foreground">Please login to apply as a reseller.</div>
+        <div className="container py-20 text-center text-muted-foreground">
+          Please login to apply as a reseller.
+        </div>
       </Layout>
     );
   }
@@ -105,35 +122,66 @@ const ResellerApplication = () => {
       <Layout>
         <div className="container py-8 max-w-3xl">
           <div className="mb-8">
-            <h1 className="text-3xl font-display font-bold mb-2">Reseller Application</h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(-1)}
+              className="mb-4"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Profile
+            </Button>
+            <h1 className="text-3xl font-display font-bold mb-2">
+              Reseller Application
+            </h1>
             <p className="text-muted-foreground">Your application status</p>
           </div>
 
           <Card>
             <CardContent className="p-8">
               <div className="text-center">
-                <div className={`text-2xl font-semibold mb-2 ${
-                  application.status === "approved" ? "text-green-500" :
-                  application.status === "pending" ? "text-yellow-500" :
-                  "text-red-500"
-                }`}>
-                  {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
+                <div
+                  className={`text-2xl font-semibold mb-2 ${
+                    application.status === "approved"
+                      ? "text-green-500"
+                      : application.status === "pending"
+                        ? "text-yellow-500"
+                        : "text-red-500"
+                  }`}
+                >
+                  {application.status.charAt(0).toUpperCase() +
+                    application.status.slice(1)}
                 </div>
                 <p className="text-muted-foreground mb-6">
                   {application.status === "approved"
                     ? "Congratulations! You are now a verified reseller. Start sharing products and earning commissions."
                     : application.status === "pending"
-                    ? "Your application is under review. We will notify you once it's processed."
-                    : application.rejection_reason}
+                      ? "Your application is under review. We will notify you once it's processed."
+                      : application.rejection_reason}
                 </p>
                 <div className="bg-muted/50 p-4 rounded-lg text-left">
                   <h3 className="font-medium mb-2">Application Details</h3>
                   <div className="space-y-2 text-sm">
-                    <p><span className="font-medium">Name:</span> {application.full_name}</p>
-                    <p><span className="font-medium">Email:</span> {application.email}</p>
-                    <p><span className="font-medium">Phone:</span> {application.phone}</p>
-                    <p><span className="font-medium">Commission Rate:</span> {application.commission_rate}%</p>
-                    <p><span className="font-medium">Submitted:</span> {new Date(application.created_at).toLocaleDateString()}</p>
+                    <p>
+                      <span className="font-medium">Name:</span>{" "}
+                      {application.full_name}
+                    </p>
+                    <p>
+                      <span className="font-medium">Email:</span>{" "}
+                      {application.email}
+                    </p>
+                    <p>
+                      <span className="font-medium">Phone:</span>{" "}
+                      {application.phone}
+                    </p>
+                    <p>
+                      <span className="font-medium">Commission Rate:</span>{" "}
+                      {application.commission_rate}%
+                    </p>
+                    <p>
+                      <span className="font-medium">Submitted:</span>{" "}
+                      {new Date(application.created_at).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -148,8 +196,21 @@ const ResellerApplication = () => {
     <Layout>
       <div className="container py-8 max-w-3xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-display font-bold mb-2">Become a Reseller</h1>
-          <p className="text-muted-foreground">Share products and earn commissions on every sale</p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(-1)}
+            className="mb-4"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Profile
+          </Button>
+          <h1 className="text-3xl font-display font-bold mb-2">
+            Become a Reseller
+          </h1>
+          <p className="text-muted-foreground">
+            Share products and earn commissions on every sale
+          </p>
         </div>
 
         <Card>
@@ -233,7 +294,9 @@ const ResellerApplication = () => {
               </div>
 
               <div>
-                <Label htmlFor="marketingExperience">Marketing Experience *</Label>
+                <Label htmlFor="marketingExperience">
+                  Marketing Experience *
+                </Label>
                 <Textarea
                   id="marketingExperience"
                   value={marketingExperience}
@@ -245,8 +308,12 @@ const ResellerApplication = () => {
               </div>
 
               <div>
-                <Label className="mb-3 block">Preferred Product Categories *</Label>
-                <p className="text-sm text-muted-foreground mb-3">Select categories you're interested in promoting</p>
+                <Label className="mb-3 block">
+                  Preferred Product Categories *
+                </Label>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Select categories you're interested in promoting
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {categories.map((category) => (
                     <button
@@ -277,12 +344,23 @@ const ResellerApplication = () => {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="button" variant="outline" onClick={() => navigate(-1)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => navigate(-1)}
+                >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={mutation.isPending} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={mutation.isPending}
+                  className="flex-1"
+                >
                   {mutation.isPending ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...</>
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                      Submitting...
+                    </>
                   ) : (
                     "Submit Application"
                   )}

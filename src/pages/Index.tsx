@@ -81,6 +81,16 @@ const Index = () => {
   };
 }, [fetchNextPage, hasNextPage]);
 
+// Auto-scroll to products when searching
+useEffect(() => {
+  if (searchQuery) {
+    const productsSection = document.getElementById("products");
+    if (productsSection) {
+      productsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+}, [searchQuery]);
+
   const products = data?.pages.flatMap((page) => page.data.data) ?? [];
 
   const filteredProducts = useMemo(() => {

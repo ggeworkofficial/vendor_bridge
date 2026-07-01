@@ -10,6 +10,7 @@ import { useAuth } from "@/features/auth/auth.store";
 import { api } from "@/api/client";
 import { logout as logoutFun } from "@/api/auth.api";
 import { ModeToggle } from "@/components/mode-toggle";
+import { useInventoryStore } from "@/features/inventory/inventory.store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +24,9 @@ const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const user = useAuth((state) => state.user);
   const { logout } = useAuth();
+  const inventory = useInventoryStore((state) => state.inventory);
   const [search, setSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -45,6 +48,12 @@ const Header = () => {
     }
   };
 
+  const suggestions = search.trim()
+    ? inventory
+        .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+        .slice(0, 5)
+    : [];
+
   return (
     <header className="sticky top-0 z-50 border-b bg-card/80 backdrop-blur-lg">
       <div className="container flex h-16 items-center justify-between gap-4">
@@ -65,16 +74,51 @@ const Header = () => {
         {/* Search */}
         <form
           onSubmit={handleSearch}
-          className="hidden md:flex flex-1 max-w-md"
+          className="hidden md:flex flex-1 max-w-md relative"
         >
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
             <Input
               placeholder="Search products..."
               className="pl-10 bg-muted/50"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             />
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-card border rounded-lg shadow-lg z-50 overflow-hidden">
+                {suggestions.map((product) => (
+                  <div
+                    key={product.id}
+                    className="px-4 py-2 hover:bg-muted cursor-pointer text-sm"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      navigate(`/product/${product.id}`);
+                      setSearch("");
+                      setShowSuggestions(false);
+                    }}
+                  >
+                    {product.name}
+                  </div>
+                ))}
+                <div
+                  className="px-4 py-2 hover:bg-muted cursor-pointer text-sm text-primary border-t"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleSearch({
+                      preventDefault: () => {},
+                    } as React.FormEvent);
+                    setShowSuggestions(false);
+                  }}
+                >
+                  See all results for "{search}"
+                </div>
+              </div>
+            )}
           </div>
         </form>
 

@@ -36,10 +36,21 @@ import ServiceProposals from "./pages/ServiceProposals";
 import ServiceChat from "./pages/ServiceChat";
 import ServiceProjectsDashboard from "./pages/ServiceProjectsDashboard";
 import { useAuth } from "@/features/auth/auth.store";
-import {getCurrentUser} from "@/api/auth.api";
+import { getCurrentUser } from "@/api/auth.api";
 import { useEffect } from "react";
+import { getInventory } from "@/api/inventory.api";
+import { useInventoryStore } from "@/features/inventory/inventory.store";
+import Dashboard from "./pages/Dashboard";
+import { Navigate } from "react-router-dom";
+import Wishlist from "./pages/Wishlist";
+import Liked from "./pages/Liked";
 
 const queryClient = new QueryClient();
+
+const HomeRedirect = () => {
+  const user = useAuth((state) => state.user);
+  return user ? <Navigate to="/dashboard" replace /> : <Index />;
+};
 
 const App = () => {
   useEffect(() => {
@@ -56,6 +67,20 @@ const App = () => {
     loadUser();
   }, []);
 
+  const setInventory = useInventoryStore((state) => state.setInventory);
+
+  useEffect(() => {
+    const loadInventory = async () => {
+      try {
+        const res = await getInventory({ limit: 50 });
+        setInventory(res.data.data);
+      } catch (err) {
+        console.error("Failed to load inventory for search:", err);
+      }
+    };
+    loadInventory();
+  }, [setInventory]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -64,42 +89,74 @@ const App = () => {
           <Sonner />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<HomeRedirect />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/cart" element={<Cart />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/profile" element={<Profile />} />   
+              <Route path="/profile" element={<Profile />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/contact" element={<Contact />} />
-              <Route path="/seller/application" element={<SellerApplication />} />
+              <Route
+                path="/seller/application"
+                element={<SellerApplication />}
+              />
+
+              <Route path="/liked" element={<Liked />} />
+              <Route path="/wishlist" element={<Wishlist />} />
               <Route path="/seller/dashboard" element={<SellerDashboard />} />
-              <Route path="/seller/products/new" element={<SellerProductForm />} />
+              <Route
+                path="/seller/products/new"
+                element={<SellerProductForm />}
+              />
               <Route path="/seller/:id" element={<SellerProfile />} />
               <Route path="/bulk/create" element={<BulkListingForm />} />
               <Route path="/rfq/:productId" element={<RFQForm />} />
               <Route path="/rfq/:rfqId/quotes" element={<QuoteComparison />} />
               <Route path="/bulk/orders" element={<BulkOrderDashboard />} />
-              <Route path="/verify/business" element={<BusinessVerification />} />
+              <Route
+                path="/verify/business"
+                element={<BusinessVerification />}
+              />
               <Route path="/reseller/apply" element={<ResellerApplication />} />
-              <Route path="/reseller/dashboard" element={<ResellerDashboard />} />
+              <Route
+                path="/reseller/dashboard"
+                element={<ResellerDashboard />}
+              />
               <Route path="/share/:productId" element={<ProductShare />} />
-              <Route path="/skills/register" element={<ServiceProviderRegistration />} />
-              <Route path="/skills/profile" element={<ServiceProviderProfile />} />
+              <Route
+                path="/skills/register"
+                element={<ServiceProviderRegistration />}
+              />
+              <Route
+                path="/skills/profile"
+                element={<ServiceProviderProfile />}
+              />
               <Route path="/skills/create" element={<ServiceListingForm />} />
-              <Route path="/skills/marketplace" element={<SkillsMarketplace />} />
+              <Route
+                path="/skills/marketplace"
+                element={<SkillsMarketplace />}
+              />
               <Route path="/skills/:id" element={<ServiceDetail />} />
               <Route path="/skills/requests" element={<ServiceRequests />} />
-              <Route path="/skills/requests/:requestId/proposals" element={<ServiceProposals />} />
+              <Route
+                path="/skills/requests/:requestId/proposals"
+                element={<ServiceProposals />}
+              />
               <Route path="/skills/chat/:projectId" element={<ServiceChat />} />
-              <Route path="/skills/projects" element={<ServiceProjectsDashboard />} />
+              <Route
+                path="/skills/projects"
+                element={<ServiceProjectsDashboard />}
+              />
               <Route path="*" element={<NotFound />} />
+              <Route path="/dashboard" element={<Dashboard />} />
             </Routes>
           </BrowserRouter>
         </CartProvider>
       </TooltipProvider>
     </QueryClientProvider>
-)};
+  );
+};
 
 export default App;

@@ -1,11 +1,22 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, BadgeCheck, Star, MapPin, Store } from "lucide-react";
+import {
+  ShoppingCart,
+  BadgeCheck,
+  Star,
+  MapPin,
+  Store,
+  Bookmark,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { InventoryProduct } from "@/types/inventory";
 import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
 import { TrustBadge } from "./TrustBadge";
+import { FavoriteButton } from "./FavoriteButton";
+import { useFavorites } from "@/hooks/useFavorites";
+import { cn } from "@/lib/utils";
+import { useWishlist } from '@/hooks/useWishlist';
 
 const qualityColors: Record<string, string> = {
   high: "bg-success text-success-foreground",
@@ -13,8 +24,20 @@ const qualityColors: Record<string, string> = {
   low: "bg-destructive text-destructive-foreground",
 };
 
-const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?: number }) => {
+const ProductCard = ({
+  product,
+  index = 0,
+}: {
+  product: InventoryProduct;
+  index?: number;
+}) => {
   const { addItem } = useCart();
+
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const saved = isFavorite(product.id);
+
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const bookmarked = isInWishlist(product.id);
 
   const productImage = product.images[0]?.image_url || "";
 
@@ -36,12 +59,32 @@ const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <div className="absolute top-2 left-2 flex gap-1.5">
-            <TrustBadge postedBy={product.posted_by} sellerName={product.seller.name} className="text-xs" />
-            <Badge className={qualityColors[product.quality_label] + " text-xs"}>
+            <TrustBadge
+              postedBy={product.posted_by}
+              sellerName={product.seller.name}
+              className="text-xs"
+            />
+            <Badge
+              className={qualityColors[product.quality_label] + " text-xs"}
+            >
               {product.quality_label}
             </Badge>
           </div>
-        </div>
+          {/* Heart button — MUST be inside the relative container above */}
+          <div className="absolute top-2 right-2 z-10">
+            <FavoriteButton
+              product={{
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                image: productImage,
+                vendor: product.seller.name,
+              }}
+              size="sm"
+            />
+          </div>
+        </div>{" "}
+        {/* ← closes relative aspect-square */}
       </Link>
       <div className="p-4 space-y-2">
         <Link to={`/product/${product.id}`}>
@@ -68,30 +111,56 @@ const ProductCard = ({ product, index = 0 }: { product: InventoryProduct; index?
           </div>
         )}
         <div className="flex items-center justify-between pt-2">
-          <span className="text-lg font-display font-bold">${Number(product.price).toFixed(2)}</span>
+          <span className="text-lg font-display font-bold">
+            ${Number(product.price).toFixed(2)}
+          </span>
+          <div className="flex items-center gap-2">
           <Button
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              addItem({
-                id: product.id,
-                name: product.name,
-                description: product.description,
-                price: product.price,
-                qualityLabel: product.quality_label,
-                verified: product.verified,
-                images: [product.images[0]?.image_url || ""],
-                category: product.category.name,
-                location: product.location,
-                lastUpdated: product.updated_at,
-                rating: product.rating,
-                reviewCount: product.reviewCount,
-              });
-            }}
-          >
-            <ShoppingCart className="h-4 w-4 mr-1" />
-            Add
-          </Button>
+              variant="outline"
+              size="icon"
+              className={cn(
+                "h-8 w-8 transition-colors",
+                bookmarked
+                  ? "bg-yellow-500 text-white border-yellow-500 hover:bg-yellow-600"
+                  : "hover:text-yellow-500 hover:border-yellow-400",
+              )}
+              onClick={(e) => {
+                e.preventDefault();
+                toggleWishlist({
+                  id: product.id,
+                  name: product.name,
+                  price: product.price,
+                  image: productImage,
+                  vendor: product.seller.name,
+                });
+              }}
+            >
+              <Bookmark className={cn("h-4 w-4", bookmarked && "fill-current")} />
+            </Button>
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.preventDefault();
+                addItem({
+                  id: product.id,
+                  name: product.name,
+                  description: product.description,
+                  price: product.price,
+                  qualityLabel: product.quality_label,
+                  verified: product.verified,
+                  images: [product.images[0]?.image_url || ""],
+                  category: product.category.name,
+                  location: product.location,
+                  lastUpdated: product.updated_at,
+                  rating: product.rating,
+                  reviewCount: product.reviewCount,
+                });
+              }}
+            >
+              <ShoppingCart className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </div>
         </div>
       </div>
     </motion.div>

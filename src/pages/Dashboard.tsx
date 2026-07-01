@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 import {
   ShoppingBag,
   Package,
@@ -19,6 +20,7 @@ import { useAuth } from "@/features/auth/auth.store";
 import { useCart } from "@/lib/cart-context";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useWishlist } from "@/hooks/useWishlist";
 import { InventoryProduct } from "@/types/inventory";
 
 const Dashboard = () => {
@@ -27,6 +29,7 @@ const Dashboard = () => {
   const { itemCount } = useCart();
   const inventory = useInventoryStore((state) => state.inventory);
   const { count: savedCount, favorites } = useFavorites();
+  const { count: wishlistCount } = useWishlist();
 
   // Redirect if not logged in
   useEffect(() => {
@@ -124,10 +127,15 @@ const Dashboard = () => {
             <Link to="/wishlist" className="block">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="p-2 bg-yellow-500/10 rounded-lg">
-                  <Bookmark className="h-5 w-5 text-yellow-500" />
+                  <Bookmark
+                    className={cn(
+                      "h-5 w-5 text-yellow-500",
+                      wishlistCount > 0 && "fill-yellow-500",
+                    )}
+                  />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">{savedCount}</p>
+                  <p className="text-2xl font-bold">{wishlistCount}</p>
                   <p className="text-xs text-muted-foreground">My Wishlist</p>
                 </div>
               </CardContent>

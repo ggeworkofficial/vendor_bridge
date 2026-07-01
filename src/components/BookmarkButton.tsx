@@ -1,5 +1,5 @@
 import { Bookmark } from 'lucide-react';
-import { useFavorites } from '@/hooks/useFavorites';
+import { useWishlist } from '@/hooks/useWishlist';
 import { cn } from '@/lib/utils';
 
 interface BookmarkButtonProps {
@@ -27,15 +27,15 @@ const iconSizes = {
 };
 
 export function BookmarkButton({ product, size = 'md', className }: BookmarkButtonProps) {
-  const { isFavorite, toggleFavorite } = useFavorites();
-  const saved = isFavorite(product.id);
+  const { isInWishlist, toggleWishlist } = useWishlist();
+  const saved = isInWishlist(product.id);
 
   return (
     <button
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggleFavorite(product);
+        toggleWishlist(product);
       }}
       className={cn(
         'flex items-center justify-center rounded-full transition-all duration-200',
@@ -43,12 +43,12 @@ export function BookmarkButton({ product, size = 'md', className }: BookmarkButt
         'border border-gray-200/50',
         'hover:scale-110 active:scale-95',
         saved 
-          ? 'text-blue-600 hover:text-blue-700' 
-          : 'text-gray-400 hover:text-blue-500',
+          ? 'text-yellow-600 hover:text-yellow-700' 
+          : 'text-gray-400 hover:text-yellow-500',
         sizeClasses[size],
         className
       )}
-      aria-label={saved ? 'Remove from saved' : 'Save for later'}
+      aria-label={saved ? 'Remove from wishlist' : 'Add to wishlist'}
     >
       <Bookmark
         size={iconSizes[size]}

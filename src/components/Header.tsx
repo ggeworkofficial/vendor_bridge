@@ -192,11 +192,6 @@ const Header = () => {
               <Link to="/admin">Admin</Link>
             </Button>
           )}
-          {user?.role === "admin" && (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/admin">Admin</Link>
-            </Button>
-          )}
         </nav>
 
         {/* Actions */}

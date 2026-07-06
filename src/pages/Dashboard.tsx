@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -19,8 +19,8 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/features/auth/auth.store";
 import { useCart } from "@/lib/cart-context";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
-import { useFavorites } from "@/hooks/useFavorites";
-import { useWishlist } from "@/hooks/useWishlist";
+import { useFavoritesStore } from "@/features/favorites/favorites.store";
+import { useWishlistStore } from "@/features/wishlist/wishlist.store";
 import { InventoryProduct } from "@/types/inventory";
 
 const Dashboard = () => {
@@ -28,8 +28,11 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { itemCount } = useCart();
   const inventory = useInventoryStore((state) => state.inventory);
-  const { count: savedCount, favorites } = useFavorites();
-  const { count: wishlistCount } = useWishlist();
+  const savedCount = useFavoritesStore((state) => state.count());
+  const favorites = useFavoritesStore((state) => state.favorites);
+  const wishlistCount = useWishlistStore((state) => state.count());
+  const wishlistItems = useWishlistStore((state) => state.items);
+  const [recPage, setRecPage] = useState(1);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -39,9 +42,36 @@ const Dashboard = () => {
   }, [user, navigate]);
 
   if (!user) return null;
+  
+  const getCategory = (id: string) =>
+    inventory.find((p) => p.id === id)?.category?.name;
 
-  // Mock recommendations (first 4 products for now)
-  const recommendations = inventory.slice(0, 4);
+  const likedCategories = favorites.map((f) => getCategory(f.id)).filter(Boolean);
+  const wishlistCategories = wishlistItems.map((w) => getCategory(w.id)).filter(Boolean);
+  
+  const interestedCategories = [...new Set([...likedCategories, ...wishlistCategories])];
+
+  // Build recommendations: match categories, exclude already liked/wishlisted, shuffle, take 4
+  const likedIds = new Set(favorites.map((f) => f.id));
+  const wishlistIds = new Set(wishlistItems.map((w) => w.id));
+  const excludedIds = new Set([...likedIds, ...wishlistIds]);
+
+  const ITEMS_PER_PAGE = 8;
+
+  const allRecommendations = interestedCategories.length > 0
+    ? inventory
+        .filter((p) => 
+          interestedCategories.includes(p.category?.name) &&
+          !excludedIds.has(p.id)
+        )
+        .sort(() => Math.random() - 0.5)
+    : inventory
+        .filter((p) => !excludedIds.has(p.id))
+        .sort(() => Math.random() - 0.5);
+
+  const recommendations = allRecommendations.slice(0, recPage * ITEMS_PER_PAGE);
+  const hasMoreRecs = recommendations.length < allRecommendations.length;
+
   const recentlyViewed = inventory.slice(4, 8);
 
   return (
@@ -182,7 +212,7 @@ const Dashboard = () => {
           </section>
         )}
 
-        {/* Recommendations */}
+{/* Recommendations */}
         {recommendations.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
@@ -199,6 +229,13 @@ const Dashboard = () => {
                 <ProductCard key={product.id} product={product} index={i} />
               ))}
             </div>
+            {hasMoreRecs && (
+              <div className="flex justify-center mt-6">
+                <Button variant="outline" onClick={() => setRecPage(p => p + 1)}>
+                  Load More
+                </Button>
+              </div>
+            )}
           </section>
         )}
       </div>

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ProductCard from "@/components/ProductCard";
 import Layout from "@/components/Layout";
-import { useWishlist } from "@/hooks/useWishlist";
+import { useWishlistStore } from "@/features/wishlist/wishlist.store";
 import { InventoryProduct } from "@/types/inventory";
 
 const Wishlist = () => {
-    const { items: favorites, count } = useWishlist();
+  const favorites = useWishlistStore((state) => state.items);
+  const count = useWishlistStore((state) => state.count());
 
   return (
     <Layout>
@@ -54,7 +55,7 @@ const Wishlist = () => {
                 images: [
                   { image_url: product.image, image_name: product.name },
                 ],
-                category: { id: "", name: "" },
+                category: { id: "", name: product.category || "" },
                 seller: { id: "", name: product.vendor },
                 location: "",
                 rating: 0,
@@ -81,7 +82,7 @@ const Wishlist = () => {
                 Your Wishlist is Empty
               </h3>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Start saving products by clicking the bookmark icon on any product.
+                Start saving products by clicking the bookmark icon on any product.
               </p>
               <Button asChild>
                 <Link to="/">

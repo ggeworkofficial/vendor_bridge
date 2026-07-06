@@ -22,7 +22,7 @@ const maxWidthClasses: Record<NonNullable<BaseDialogProps["maxWidth"]>, string> 
 export const BaseDialog = ({ open, onOpenChange, children, className, maxWidth = "lg" }: BaseDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`${maxWidthClasses[maxWidth]} ${className || ""}`}>
+      <DialogContent className={`${maxWidthClasses[maxWidth]} ${className || ""}overflow-y-auto max-h-[90vh]`}>
         {children}
       </DialogContent>
     </Dialog>

@@ -1,5 +1,5 @@
 import { Heart } from 'lucide-react';
-import { useFavorites } from '@/hooks/useFavorites';
+import { useFavoritesStore } from '@/features/favorites/favorites.store';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 
@@ -10,6 +10,7 @@ interface FavoriteButtonProps {
     price: number;
     image: string;
     vendor: string;
+    category?: string;
   };
   size?: 'sm' | 'md' | 'lg';
   className?: string;
@@ -28,7 +29,8 @@ const iconSizes = {
 };
 
 export function FavoriteButton({ product, size = 'md', className }: FavoriteButtonProps) {
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const isFavorite = useFavoritesStore((state) => state.isFavorite);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
   const favorited = isFavorite(product.id);
   const [justClicked, setJustClicked] = useState(false);
 

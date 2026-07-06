@@ -16,7 +16,9 @@ export const useComplaintMessageStore = create<ComplaintMessageState>((set, get)
   selectedComplaintMessage: null,
   setComplaintMessages: (messages) => set({ complaintMessages: messages }),
   setSelectedComplaintMessage: (message) => set({ selectedComplaintMessage: message }),
-  addComplaintMessage: (message) => set((state) => ({ complaintMessages: [message, ...state.complaintMessages] })),
+  addComplaintMessage: (message) => set((state) => ({ 
+    complaintMessages: [...state.complaintMessages, message]  // ← chronological order
+  })),
   getComplaintMessage: (id) => get().complaintMessages.find((m) => m.id === id) || null,
   clearComplaintMessages: () => set({ complaintMessages: [] }),
 }));

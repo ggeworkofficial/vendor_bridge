@@ -14,15 +14,9 @@ import { useCart } from "@/lib/cart-context";
 import { motion } from "framer-motion";
 import { TrustBadge } from "./TrustBadge";
 import { FavoriteButton } from "./FavoriteButton";
-import { useFavorites } from "@/hooks/useFavorites";
 import { cn } from "@/lib/utils";
-import { useWishlist } from '@/hooks/useWishlist';
-
-const qualityColors: Record<string, string> = {
-  high: "bg-success text-success-foreground",
-  medium: "bg-warning text-warning-foreground",
-  low: "bg-destructive text-destructive-foreground",
-};
+import { useFavoritesStore } from "@/features/favorites/favorites.store";
+import { useWishlistStore } from "@/features/wishlist/wishlist.store";
 
 const ProductCard = ({
   product,
@@ -33,10 +27,12 @@ const ProductCard = ({
 }) => {
   const { addItem } = useCart();
 
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const isFavorite = useFavoritesStore((state) => state.isFavorite);
+  const toggleFavorite = useFavoritesStore((state) => state.toggleFavorite);
   const saved = isFavorite(product.id);
-
-  const { isInWishlist, toggleWishlist } = useWishlist();
+  
+  const isInWishlist = useWishlistStore((state) => state.isInWishlist);
+  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
   const bookmarked = isInWishlist(product.id);
 
   const productImage = product.images[0]?.image_url || "";
@@ -58,17 +54,12 @@ const ProductCard = ({
             height={640}
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
-          <div className="absolute top-2 left-2 flex gap-1.5">
+          <div className="absolute top-2 left-2">
             <TrustBadge
               postedBy={product.posted_by}
               sellerName={product.seller.name}
               className="text-xs"
             />
-            <Badge
-              className={qualityColors[product.quality_label] + " text-xs"}
-            >
-              {product.quality_label}
-            </Badge>
           </div>
           {/* Heart button — MUST be inside the relative container above */}
           <div className="absolute top-2 right-2 z-10">
@@ -79,6 +70,7 @@ const ProductCard = ({
                 price: product.price,
                 image: productImage,
                 vendor: product.seller.name,
+                category: product.category.name,
               }}
               size="sm"
             />
@@ -99,6 +91,18 @@ const ProductCard = ({
           </div>
           <span>·</span>
           <span>{product.reviewCount} reviews</span>
+          <span
+            className={cn(
+              "inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide",
+              product.quality_label === "high"
+                ? "bg-emerald-500/15 text-emerald-400"
+                : product.quality_label === "medium"
+                  ? "bg-amber-500/15 text-amber-400"
+                  : "bg-red-500/15 text-red-400",
+            )}
+          >
+            {product.quality_label}
+          </span>
         </div>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">
           <MapPin className="h-3 w-3" />
@@ -111,11 +115,37 @@ const ProductCard = ({
           </div>
         )}
         <div className="flex items-center justify-between pt-2">
-          <span className="text-lg font-display font-bold">
-            ${Number(product.price).toFixed(2)}
-          </span>
+          <div className="space-y-1">
+            <span className="text-lg font-display font-bold">
+              ${Number(product.price).toFixed(2)}
+            </span>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs",
+                  product.quantity <= 5 && product.quantity > 0
+                    ? "border-destructive text-destructive bg-destructive/10"
+                    : product.quantity <= 10 && product.quantity > 0
+                      ? "border-warning text-warning bg-warning/10"
+                      : product.quantity > 0
+                        ? "border-success text-success bg-success/10"
+                        : "border-muted text-muted-foreground",
+                )}
+              >
+                {product.quantity > 0
+                  ? `${product.quantity} in stock`
+                  : "Out of stock"}
+              </Badge>
+              {product.quantity <= 5 && product.quantity > 0 && (
+                <span className="text-[10px] text-destructive font-medium">
+                  Low stock
+                </span>
+              )}
+            </div>
+          </div>
           <div className="flex items-center gap-2">
-          <Button
+            <Button
               variant="outline"
               size="icon"
               className={cn(
@@ -135,7 +165,9 @@ const ProductCard = ({
                 });
               }}
             >
-              <Bookmark className={cn("h-4 w-4", bookmarked && "fill-current")} />
+              <Bookmark
+                className={cn("h-4 w-4", bookmarked && "fill-current")}
+              />
             </Button>
             <Button
               size="sm"

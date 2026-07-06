@@ -1,5 +1,5 @@
 import { create } from "zustand";
-
+import { persist } from "zustand/middleware";
 
 export type User = {
   id: string;
@@ -11,15 +11,21 @@ export type User = {
 type AuthState = {
   user: User | null;
   isAuthenticated: boolean;
-
   setUser: (user: User) => void;
   logout: () => void;
 };
 
-export const useAuth = create<AuthState>((set) => ({
-    user: null,
-    isAuthenticated: false,
+export const useAuth = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      isAuthenticated: false,
 
-    setUser: (user) => set({ user, isAuthenticated: true }),
-    logout: () => set({ user: null, isAuthenticated: false }),
-}));
+      setUser: (user) => set({ user, isAuthenticated: true }),
+      logout: () => set({ user: null, isAuthenticated: false }),
+    }),
+    {
+      name: "auth-storage",
+    }
+  )
+);

@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import ProductCard from "@/components/ProductCard";
 import Layout from "@/components/Layout";
-import { useFavorites } from "@/hooks/useFavorites";
+import { useFavoritesStore } from "@/features/favorites/favorites.store";
 import { InventoryProduct } from "@/types/inventory";
 
 const Liked = () => {
-  const { favorites, count } = useFavorites();
+  const favorites = useFavoritesStore((state) => state.favorites);
+  const count = useFavoritesStore((state) => state.count());
 
   return (
     <Layout>
@@ -52,7 +53,7 @@ const Liked = () => {
                 images: [
                   { image_url: product.image, image_name: product.name },
                 ],
-                category: { id: "", name: "" },
+                category: { id: "", name: product.category || "" },
                 seller: { id: "", name: product.vendor },
                 location: "",
                 rating: 0,

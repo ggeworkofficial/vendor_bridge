@@ -18,6 +18,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Header = () => {
   const { itemCount } = useCart();
@@ -28,8 +36,10 @@ const Header = () => {
   const [search, setSearch] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   const handleLogout = async () => {
+    setLogoutDialogOpen(false);
     try {
       await logoutFun();
       logout();
@@ -197,11 +207,8 @@ const Header = () => {
         {/* Actions */}
         <div className="flex items-center gap-2">
           <ModeToggle />
-          <Button variant="ghost" size="icon" asChild>
-            <Link to={user ? "/profile" : "/login"}>
-              <User className="h-5 w-5" />
-            </Link>
-          </Button>
+
+          {/* Cart — comes BEFORE profile */}
           <Button variant="ghost" size="icon" className="relative" asChild>
             <Link to="/cart">
               <ShoppingCart className="h-5 w-5" />
@@ -212,6 +219,61 @@ const Header = () => {
               )}
             </Link>
           </Button>
+
+          {/* Profile — LAST in the row */}
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center text-sm font-semibold text-primary-foreground">
+                    {(
+                      user.name ||
+                      user.full_name ||
+                      user.display_name ||
+                      user.email ||
+                      "U"
+                    )
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <Link to="/profile" className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setLogoutDialogOpen(true)}
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                >
+                  <svg
+                    className="mr-2 h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="ghost" size="icon" asChild>
+              <Link to="/login">
+                <User className="h-5 w-5" />
+              </Link>
+            </Button>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -224,20 +286,8 @@ const Header = () => {
               <Menu className="h-5 w-5" />
             )}
           </Button>
-          {user ? (
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
-              Logout
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/login">
-                <User className="h-5 w-5" />
-              </Link>
-            </Button>
-          )}
         </div>
       </div>
-
       {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden border-t bg-card p-4 space-y-2 animate-fade-in">
@@ -348,6 +398,29 @@ const Header = () => {
           )}
         </div>
       )}
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Logout</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to sign out of your account?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setLogoutDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleLogout}>
+              Logout
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 };

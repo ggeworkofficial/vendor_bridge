@@ -34,6 +34,7 @@ import { getInventoryItem } from "@/api/inventory.api";
 import { getReviews, createReview } from "@/api/review.api";
 import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useToast } from "@/hooks/use-toast";
+import { useRecentlyViewedStore } from "@/features/recently-viewed/recentlyViewed.store";
 
 const ProductDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -72,6 +73,22 @@ const ProductDetail = () => {
       setSelectedProduct(product);
     }
   }, [product, setSelectedProduct]);
+
+  
+  // Track recently viewed
+  const addView = useRecentlyViewedStore((state) => state.addView);
+  React.useEffect(() => {
+    if (product) {
+      addView({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.images[0]?.image_url || "",
+        vendor: product.seller.name,
+        category: product.category?.name,
+      });
+    }
+  }, [product, addView]);
 
   // Fetch reviews when modal is open
   const { data: reviewsResponse, isLoading: reviewsLoading } = useQuery({

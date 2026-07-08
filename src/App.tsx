@@ -44,6 +44,7 @@ import Dashboard from "./pages/Dashboard";
 import { Navigate } from "react-router-dom";
 import Wishlist from "./pages/Wishlist";
 import Liked from "./pages/Liked";
+import RecentlyViewed from "./pages/RecentlyViewed";
 
 const queryClient = new QueryClient();
 
@@ -149,6 +150,7 @@ const App = () => {
                 path="/skills/projects"
                 element={<ServiceProjectsDashboard />}
               />
+              <Route path="/recently-viewed" element={<RecentlyViewed />} />
               <Route path="*" element={<NotFound />} />
               <Route path="/dashboard" element={<Dashboard />} />
             </Routes>

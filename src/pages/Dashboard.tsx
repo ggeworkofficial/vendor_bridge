@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ import { useInventoryStore } from "@/features/inventory/inventory.store";
 import { useFavoritesStore } from "@/features/favorites/favorites.store";
 import { useWishlistStore } from "@/features/wishlist/wishlist.store";
 import { InventoryProduct } from "@/types/inventory";
+import { useRecentlyViewedStore } from "@/features/recently-viewed/recentlyViewed.store";
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -41,38 +42,84 @@ const Dashboard = () => {
     }
   }, [user, navigate]);
 
-  if (!user) return null;
-  
-  const getCategory = (id: string) =>
-    inventory.find((p) => p.id === id)?.category?.name;
+  // ── RECOMMENDATIONS (fixed logic) ──
+  const recommendations = useMemo(() => {
+    const likedIds = new Set(favorites.map((f) => f.id));
+    const wishlistIds = new Set(wishlistItems.map((w) => w.id));
+    const excludedIds = new Set([...likedIds, ...wishlistIds]);
 
-  const likedCategories = favorites.map((f) => getCategory(f.id)).filter(Boolean);
-  const wishlistCategories = wishlistItems.map((w) => getCategory(w.id)).filter(Boolean);
-  
-  const interestedCategories = [...new Set([...likedCategories, ...wishlistCategories])];
+    const getCategory = (id: string) =>
+      inventory.find((p) => p.id === id)?.category?.name;
 
-  // Build recommendations: match categories, exclude already liked/wishlisted, shuffle, take 4
-  const likedIds = new Set(favorites.map((f) => f.id));
-  const wishlistIds = new Set(wishlistItems.map((w) => w.id));
-  const excludedIds = new Set([...likedIds, ...wishlistIds]);
+    const likedCategories = favorites
+      .map((f) => getCategory(f.id))
+      .filter(Boolean) as string[];
+    const wishlistCategories = wishlistItems
+      .map((w) => getCategory(w.id))
+      .filter(Boolean) as string[];
+
+    const interestedCategories = [
+      ...new Set([...likedCategories, ...wishlistCategories]),
+    ];
+
+    const matched: InventoryProduct[] = [];
+    const unmatched: InventoryProduct[] = [];
+
+    for (const product of inventory) {
+      if (excludedIds.has(product.id)) continue;
+      if (
+        interestedCategories.length > 0 &&
+        interestedCategories.includes(product.category?.name)
+      ) {
+        matched.push(product);
+      } else {
+        unmatched.push(product);
+      }
+    }
+
+    const shuffle = (arr: InventoryProduct[]) => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    return [...shuffle(matched), ...shuffle(unmatched)];
+  }, [inventory, favorites, wishlistItems]);
 
   const ITEMS_PER_PAGE = 8;
+  const visibleRecommendations = recommendations.slice(0, recPage * ITEMS_PER_PAGE);
+  const hasMoreRecs = visibleRecommendations.length < recommendations.length;
 
-  const allRecommendations = interestedCategories.length > 0
-    ? inventory
-        .filter((p) => 
-          interestedCategories.includes(p.category?.name) &&
-          !excludedIds.has(p.id)
-        )
-        .sort(() => Math.random() - 0.5)
-    : inventory
-        .filter((p) => !excludedIds.has(p.id))
-        .sort(() => Math.random() - 0.5);
+  // ── RECENTLY VIEWED (real data) ──
+  const recentlyViewedItems = useRecentlyViewedStore((state) => state.items);
+  const recentlyViewed = useMemo(() => {
+    return recentlyViewedItems
+      .map((item) => inventory.find((p) => p.id === item.id))
+      .filter(Boolean) as InventoryProduct[];
+  }, [recentlyViewedItems, inventory]);
 
-  const recommendations = allRecommendations.slice(0, recPage * ITEMS_PER_PAGE);
-  const hasMoreRecs = recommendations.length < allRecommendations.length;
+  // Infinite scroll sentinel ref
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || !hasMoreRecs) return;
 
-  const recentlyViewed = inventory.slice(4, 8);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setRecPage((p) => p + 1);
+        }
+      },
+      { rootMargin: "100px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMoreRecs]);
+
+  if (!user) return null;
 
   return (
     <Layout>
@@ -93,65 +140,57 @@ const Dashboard = () => {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card>
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <Link to="/cart" className="block">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-primary/10 rounded-lg">
-                    <ShoppingBag className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{itemCount}</p>
-                    <p className="text-xs text-muted-foreground">Cart Items</p>
-                  </div>
-                </CardContent>
-              </Link>
-            </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <Link to="/cart" className="block">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <ShoppingBag className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{itemCount}</p>
+                  <p className="text-xs text-muted-foreground">Cart Items</p>
+                </div>
+              </CardContent>
+            </Link>
           </Card>
-          <Card>
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <Link to="/orders" className="block">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-secondary/10 rounded-lg">
-                    <Package className="h-5 w-5 text-secondary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">-</p>
-                    <p className="text-xs text-muted-foreground">Orders</p>
-                  </div>
-                </CardContent>
-              </Link>
-            </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <Link to="/orders" className="block">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-secondary/10 rounded-lg">
+                  <Package className="h-5 w-5 text-secondary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">-</p>
+                  <p className="text-xs text-muted-foreground">Orders</p>
+                </div>
+              </CardContent>
+            </Link>
           </Card>
-          <Card>
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <Link to="/liked" className="block">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-red-500/10 rounded-lg">
-                    <Heart className="h-5 w-5 text-red-500 fill-red-500" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{savedCount}</p>
-                    <p className="text-xs text-muted-foreground">Liked Items</p>
-                  </div>
-                </CardContent>
-              </Link>
-            </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <Link to="/liked" className="block">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-red-500/10 rounded-lg">
+                  <Heart className="h-5 w-5 text-red-500 fill-red-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{savedCount}</p>
+                  <p className="text-xs text-muted-foreground">Liked Items</p>
+                </div>
+              </CardContent>
+            </Link>
           </Card>
-          <Card>
-            <Card className="cursor-pointer hover:shadow-md transition-shadow">
-              <Link to="/orders" className="block">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <div className="p-2 bg-blue-500/10 rounded-lg">
-                    <Clock className="h-5 w-5 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">-</p>
-                    <p className="text-xs text-muted-foreground">Pending</p>
-                  </div>
-                </CardContent>
-              </Link>
-            </Card>
+          <Card className="cursor-pointer hover:shadow-md transition-shadow">
+            <Link to="/orders" className="block">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className="p-2 bg-blue-500/10 rounded-lg">
+                  <Clock className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">-</p>
+                  <p className="text-xs text-muted-foreground">Pending</p>
+                </div>
+              </CardContent>
+            </Link>
           </Card>
           <Card className="cursor-pointer hover:shadow-md transition-shadow">
             <Link to="/wishlist" className="block">
@@ -201,19 +240,19 @@ const Dashboard = () => {
                 Recently Viewed
               </h2>
               <Button variant="ghost" size="sm" asChild>
-                <Link to="/">See All</Link>
+                <Link to="/recently-viewed">See All</Link>
               </Button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {recentlyViewed.map((product, i) => (
+              {recentlyViewed.slice(0, 4).map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} />
               ))}
             </div>
           </section>
         )}
 
-{/* Recommendations */}
-        {recommendations.length > 0 && (
+        {/* Recommendations */}
+        {visibleRecommendations.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-display font-bold flex items-center gap-2">
@@ -225,16 +264,16 @@ const Dashboard = () => {
               </Button>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {recommendations.map((product, i) => (
+              {visibleRecommendations.map((product, i) => (
                 <ProductCard key={product.id} product={product} index={i} />
               ))}
             </div>
+            {/* Infinite scroll sentinel */}
             {hasMoreRecs && (
-              <div className="flex justify-center mt-6">
-                <Button variant="outline" onClick={() => setRecPage(p => p + 1)}>
-                  Load More
-                </Button>
-              </div>
+              <div
+                ref={sentinelRef}
+                className="h-10 w-full"
+              />
             )}
           </section>
         )}
